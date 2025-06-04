@@ -1,6 +1,7 @@
 import { signOut } from "firebase/auth";
 import { useContext } from "react";
 import { FirebaseContext } from "../App"; // Adjust if you move FirebaseContext elsewhere
+import EmailLoginForm from "./EmailLoginForm";
 
 const Header = ({ navigate, currentPage }) => {
   const { user, userId, auth, signInWithGoogle } = useContext(FirebaseContext);
@@ -44,7 +45,7 @@ const Header = ({ navigate, currentPage }) => {
             </button>
           )}
         </nav>
-        <div className="text-sm mt-2 sm:mt-0">
+        <div className="text-sm mt-2 sm:mt-0 flex items-center space-x-4">
           {user ? (
             <div className="flex items-center space-x-2">
               <span>
@@ -58,12 +59,17 @@ const Header = ({ navigate, currentPage }) => {
               </button>
             </div>
           ) : (
-            <button
-              onClick={signInWithGoogle}
-              className="bg-white text-purple-700 font-semibold px-4 py-2 rounded-lg shadow hover:bg-purple-100 transition"
-            >
-              Sign in with Google
-            </button>
+            <>
+              <button
+                onClick={signInWithGoogle}
+                className="bg-white text-purple-700 font-semibold px-4 py-2 rounded-lg shadow hover:bg-purple-100 transition"
+              >
+                Sign in with Google
+              </button>
+              <div className="flex items-center">
+                <EmailLoginForm />
+              </div>
+            </>
           )}
         </div>
       </div>

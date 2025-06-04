@@ -9,6 +9,8 @@ import {
   updateDoc,
 } from "firebase/firestore";
 import { useContext, useEffect, useState } from "react";
+import ReactQuill from "react-quill-new"; // Import ReactQuill
+import "react-quill-new/dist/quill.snow.css"; // Import Quill's CSS
 import { FirebaseContext, analytics } from "../App";
 
 const appId = process.env.REACT_APP_FIREBASE_APP_ID;
@@ -17,9 +19,9 @@ const AdminPanel = () => {
   const { db, user, userId, isAuthReady } = useContext(FirebaseContext);
   const [posts, setPosts] = useState([]);
   const [selectedPost, setSelectedPost] = useState(null);
-  const [formTitle, setFormTitle] = useState("");
+  // const [formTitle, setFormTitle] = useState(""); // Removed
   const [formContent, setFormContent] = useState("");
-  const [formImageUrl, setFormImageUrl] = useState("");
+  // const [formImageUrl, setFormImageUrl] = useState(""); // Removed
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -68,9 +70,9 @@ const AdminPanel = () => {
 
   const resetForm = () => {
     setSelectedPost(null);
-    setFormTitle("");
+    // setFormTitle(""); // Removed
     setFormContent("");
-    setFormImageUrl("");
+    // setFormImageUrl(""); // Removed
     setMessage("");
   };
 
@@ -81,8 +83,10 @@ const AdminPanel = () => {
       return;
     }
 
-    if (!formTitle || !formContent) {
-      setMessage("Title and Content cannot be empty.");
+    // if (!formTitle || !formContent) { // Modified validation
+    if (!formContent) {
+      // setMessage("Title and Content cannot be empty."); // Modified message
+      setMessage("Content cannot be empty.");
       return;
     }
 
@@ -94,9 +98,9 @@ const AdminPanel = () => {
           selectedPost.id
         );
         await updateDoc(postRef, {
-          title: formTitle,
+          // title: formTitle, // Removed
           content: formContent,
-          imageUrl: formImageUrl,
+          // imageUrl: formImageUrl, // Removed
           updatedAt: new Date(),
         });
         setMessage("Post updated successfully!");
@@ -104,9 +108,9 @@ const AdminPanel = () => {
         await addDoc(
           collection(db, `artifacts/${appId}/users/${userId}/posts`),
           {
-            title: formTitle,
+            // title: formTitle, // Removed
             content: formContent,
-            imageUrl: formImageUrl,
+            // imageUrl: formImageUrl, // Removed
             createdAt: new Date(),
             updatedAt: new Date(),
           }
@@ -122,9 +126,9 @@ const AdminPanel = () => {
 
   const handleEdit = (post) => {
     setSelectedPost(post);
-    setFormTitle(post.title);
+    // setFormTitle(post.title); // Removed
     setFormContent(post.content);
-    setFormImageUrl(post.imageUrl || "");
+    // setFormImageUrl(post.imageUrl || ""); // Removed
     setMessage("");
   };
 
@@ -179,6 +183,30 @@ const AdminPanel = () => {
       </div>
     );
 
+  // Define modules and formats for ReactQuill
+  const quillModules = {
+    toolbar: [
+      [{ header: [1, 2, false] }],
+      ["bold", "italic", "underline", "strike", "blockquote"],
+      [{ list: "ordered" }, { list: "bullet" }],
+      ["link", "image"], // Enable image button
+      ["clean"],
+    ],
+  };
+
+  const quillFormats = [
+    "header",
+    "bold",
+    "italic",
+    "underline",
+    "strike",
+    "blockquote",
+    "list",
+    "bullet",
+    "link",
+    "image",
+  ];
+
   return (
     <div className="container mx-auto p-6 mt-8">
       <h2 className="text-3xl font-bold text-gray-800 mb-6">Admin Panel</h2>
@@ -210,7 +238,8 @@ const AdminPanel = () => {
           {selectedPost ? "Edit Post" : "Create New Post"}
         </h3>
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
+          {/* Title Input Removed */}
+          {/* <div>
             <label
               htmlFor="title"
               className="block text-gray-700 text-sm font-bold mb-2"
@@ -225,24 +254,27 @@ const AdminPanel = () => {
               className="border border-gray-300 rounded-lg w-full py-2 px-3 text-gray-800 leading-tight focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent"
               required
             />
-          </div>
+          </div> */}
           <div>
-            <label
-              htmlFor="content"
+            {/* <label
+              htmlFor="content" // Label might be redundant now if it's the only main field
               className="block text-gray-700 text-sm font-bold mb-2"
             >
               Content:
-            </label>
-            <textarea
-              id="content"
+            </label> */}
+            <ReactQuill
+              theme="snow"
               value={formContent}
-              onChange={(e) => setFormContent(e.target.value)}
-              rows="10"
-              className="border border-gray-300 rounded-lg w-full py-2 px-3 text-gray-800 leading-tight focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent"
-              required
-            ></textarea>
+              onChange={setFormContent}
+              modules={quillModules}
+              formats={quillFormats}
+              className="bg-white rounded-lg shadow-sm border border-gray-300 min-h-[300px]" // Added min-h for a larger editor feel
+              placeholder="Start writing your post..." // Added placeholder
+              // 'required' prop might not work directly on ReactQuill for validation. Validation is handled in handleSubmit.
+            />
           </div>
-          <div>
+          {/* Image URL Input Removed */}
+          {/* <div>
             <label
               htmlFor="imageUrl"
               className="block text-gray-700 text-sm font-bold mb-2"
@@ -257,8 +289,10 @@ const AdminPanel = () => {
               className="shadow appearance-none border rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-purple-500"
               placeholder="e.g., https://example.com/image.jpg"
             />
-          </div>
-          <div className="flex space-x-4">
+          </div> */}
+          <div className="flex space-x-4 pt-4">
+            {" "}
+            {/* Added pt-4 for spacing */}
             <button
               type="submit"
               className="bg-gray-800 hover:bg-gray-700 text-white font-bold py-2 px-6 rounded-lg transition duration-300 ease-in-out shadow-md"
@@ -294,11 +328,13 @@ const AdminPanel = () => {
               >
                 <div>
                   <h4 className="text-lg font-medium text-gray-900">
-                    {post.title}
+                    {/* This will need adjustment if post.title is no longer saved */}
+                    {post.title || "Untitled Post"}
                   </h4>
-                  <p className="text-sm text-gray-500 line-clamp-1">
-                    {post.content}
-                  </p>
+                  <p
+                    className="text-sm text-gray-500 line-clamp-1"
+                    dangerouslySetInnerHTML={{ __html: post.content }}
+                  />
                 </div>
                 <div className="flex space-x-3">
                   <button

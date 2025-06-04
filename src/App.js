@@ -12,6 +12,7 @@ import AdminPanel from "./components/AdminPanel";
 import Header from "./components/Header";
 import PostDetail from "./components/PostDetail";
 import PostList from "./components/PostList";
+import LoginCallback from "./pages/LoginCallback";
 
 import "./index.css";
 
@@ -104,8 +105,15 @@ export default function App() {
 
   const navigate = (page) => {
     setCurrentPage(page);
-    setSelectedPost(null); // Clear selected post when navigating
+    setSelectedPost(null);
   };
+
+  useEffect(() => {
+    const path = window.location.pathname;
+    if (path === "/login-callback") {
+      setCurrentPage("loginCallback");
+    }
+  }, []);
 
   return (
     <FirebaseProvider>
@@ -119,6 +127,9 @@ export default function App() {
             <PostDetail post={selectedPost} onBack={handleBackToPosts} />
           )}
           {currentPage === "admin" && <AdminPanel />}
+          {currentPage === "loginCallback" && (
+            <LoginCallback navigate={navigate} />
+          )}
         </main>
       </div>
     </FirebaseProvider>
