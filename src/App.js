@@ -30,7 +30,7 @@ const firebaseConfig = {
 };
 
 // Initialize Firebase App
-const app = initializeApp(firebaseConfig);
+export const app = initializeApp(firebaseConfig);
 export const analytics = getAnalytics(app);
 const db = getFirestore(app);
 const auth = getAuth(app);

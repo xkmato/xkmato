@@ -17,12 +17,12 @@ import {
 import { useContext, useEffect, useRef, useState } from "react"; // Added useRef
 import ReactQuill from "react-quill-new"; // Import ReactQuill
 import "react-quill-new/dist/quill.snow.css"; // Import Quill's CSS
-import { FirebaseContext, analytics } from "../App";
+import { FirebaseContext, analytics, app } from "../App";
 
 const appId = process.env.REACT_APP_FIREBASE_APP_ID;
 
 const AdminPanel = () => {
-  const { db, user, userId, isAuthReady, app } = useContext(FirebaseContext); // Ensure 'storage' is provided by FirebaseContext
+  const { db, user, userId, isAuthReady } = useContext(FirebaseContext); // Ensure 'storage' is provided by FirebaseContext
   // If 'storage' is not in FirebaseContext, you might initialize it:
   const storage = getStorage(app); // Make sure your Firebase app is initialized
 

@@ -96,3 +96,5 @@ yarn-error.log*
 # firebase
 firestore.rules
 .firebaserc
+
+screenshots
