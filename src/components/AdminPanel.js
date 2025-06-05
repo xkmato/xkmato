@@ -203,6 +203,7 @@ const AdminPanel = () => {
           title: formTitle,
           content: formContent,
           updatedAt: new Date(),
+          userId, // <-- Add this line
         });
         setMessage("Post updated successfully!");
       } else {
@@ -213,6 +214,7 @@ const AdminPanel = () => {
             content: formContent,
             createdAt: new Date(),
             updatedAt: new Date(),
+            userId, // <-- Add this line
           }
         );
         setMessage("Post created successfully!");

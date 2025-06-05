@@ -23,7 +23,7 @@ const Header = ({ navigate, currentPage }) => {
         </h1>
         <nav className="flex space-x-4">
           <button
-            onClick={() => navigate("home")}
+            onClick={() => navigate("/")}
             className={`px-4 py-2 rounded-lg font-medium transition duration-300 ease-in-out ${
               currentPage === "home"
                 ? "bg-gray-200 text-gray-800 shadow-sm"

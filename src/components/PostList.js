@@ -140,7 +140,16 @@ const PostList = ({ onSelectPost, navigate }) => {
             Top
           </button>
           <button className="py-2 px-3 text-sm font-medium text-gray-600 hover:text-gray-900">
-            Discussions
+            The Mortals (Book)
+          </button>
+          <button className="py-2 px-3 text-sm font-medium text-gray-600 hover:text-gray-900">
+            Bukalabi (Book)
+          </button>
+          <button className="py-2 px-3 text-sm font-medium text-gray-600 hover:text-gray-900">
+            Web3 (Topic)
+          </button>
+          <button className="py-2 px-3 text-sm font-medium text-gray-600 hover:text-gray-900">
+            Others
           </button>
         </div>
 

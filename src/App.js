@@ -8,6 +8,12 @@ import {
 } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 import { createContext, useEffect, useState } from "react";
+import {
+  Route,
+  BrowserRouter as Router,
+  Routes,
+  useNavigate,
+} from "react-router-dom";
 import AdminPanel from "./components/AdminPanel";
 import Header from "./components/Header";
 import PostDetail from "./components/PostDetail";
@@ -88,50 +94,55 @@ function FirebaseProvider({ children }) {
   );
 }
 
-// Main App component
-export default function App() {
-  const [currentPage, setCurrentPage] = useState("home");
-  const [selectedPost, setSelectedPost] = useState(null);
+function AppRoutes() {
+  const navigate = useNavigate();
+  const [selectedPost] = useState(null);
 
-  const handleSelectPost = (post) => {
-    setSelectedPost(post);
-    setCurrentPage("postDetail");
-  };
-
-  const handleBackToPosts = () => {
-    setSelectedPost(null);
-    setCurrentPage("home");
-  };
-
-  const navigate = (page) => {
-    setCurrentPage(page);
-    setSelectedPost(null);
-  };
-
-  useEffect(() => {
-    const path = window.location.pathname;
-    if (path === "/login-callback") {
-      setCurrentPage("loginCallback");
-    }
-  }, []);
+  // You may want to fetch the post by ID here if needed
 
   return (
+    <>
+      <Header navigate={navigate} />
+      <main className="container mx-auto py-8">
+        <Routes>
+          <Route
+            path="/"
+            element={
+              <PostList
+                onSelectPost={(post) =>
+                  navigate(`/post/${post.userId}/${post.id}`)
+                }
+                navigate={navigate}
+              />
+            }
+          />
+          <Route
+            path="/post/:userId/:postId"
+            element={
+              <PostDetail
+                post={selectedPost /* fetch by postId */}
+                onBack={() => navigate("/")}
+              />
+            }
+          />
+          <Route path="/admin" element={<AdminPanel />} />
+          <Route
+            path="/login-callback"
+            element={<LoginCallback navigate={navigate} />}
+          />
+        </Routes>
+      </main>
+    </>
+  );
+}
+
+// Main App component
+export default function App() {
+  return (
     <FirebaseProvider>
-      <div className="min-h-screen bg-gray-100 font-inter antialiased">
-        <Header navigate={navigate} currentPage={currentPage} />
-        <main className="container mx-auto py-8">
-          {currentPage === "home" && !selectedPost && (
-            <PostList onSelectPost={handleSelectPost} navigate={navigate} />
-          )}
-          {currentPage === "postDetail" && selectedPost && (
-            <PostDetail post={selectedPost} onBack={handleBackToPosts} />
-          )}
-          {currentPage === "admin" && <AdminPanel />}
-          {currentPage === "loginCallback" && (
-            <LoginCallback navigate={navigate} />
-          )}
-        </main>
-      </div>
+      <Router>
+        <AppRoutes />
+      </Router>
     </FirebaseProvider>
   );
 }
