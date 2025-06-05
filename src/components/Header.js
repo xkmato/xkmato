@@ -32,7 +32,7 @@ const Header = ({ navigate, currentPage }) => {
           >
             Home
           </button>
-          {user && (
+          {user?.uid === process.env.REACT_APP_ADMIN_USER_UID && (
             <button
               onClick={() => navigate("admin")}
               className={`px-4 py-2 rounded-lg font-medium transition duration-300 ease-in-out ${

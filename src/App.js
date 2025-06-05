@@ -7,7 +7,7 @@ import {
   signInWithPopup,
 } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
-import { createContext, useEffect, useState } from "react";
+import React, { createContext, useEffect, useState } from "react";
 import {
   Route,
   BrowserRouter as Router,
@@ -100,6 +100,8 @@ function AppRoutes() {
 
   // You may want to fetch the post by ID here if needed
 
+  const { user } = React.useContext(FirebaseContext);
+
   return (
     <>
       <Header navigate={navigate} />
@@ -125,7 +127,9 @@ function AppRoutes() {
               />
             }
           />
-          <Route path="/admin" element={<AdminPanel />} />
+          {user?.uid === process.env.REACT_APP_ADMIN_USER_UID && (
+            <Route path="/admin" element={<AdminPanel />} />
+          )}
           <Route
             path="/login-callback"
             element={<LoginCallback navigate={navigate} />}

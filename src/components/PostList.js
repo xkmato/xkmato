@@ -1,5 +1,11 @@
+import {
+  getAuth,
+  GoogleAuthProvider,
+  sendSignInLinkToEmail,
+  signInWithPopup,
+} from "firebase/auth";
 import { collection, onSnapshot, query } from "firebase/firestore";
-import { useContext, useEffect, useState } from "react";
+import { useContext, useEffect, useRef, useState } from "react";
 import { FirebaseContext } from "../App";
 
 // Helper to strip HTML for plain text excerpt
@@ -16,17 +22,45 @@ const stripHtml = (html) => {
 
 // Post List component
 const PostList = ({ onSelectPost, navigate }) => {
-  const { db, isAuthReady, userId } = useContext(FirebaseContext);
+  const { db, isAuthReady, user, app } = useContext(FirebaseContext);
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const emailRef = useRef();
+
+  // Google Sign-In handler
+  const handleGoogleSignIn = async () => {
+    const auth = getAuth(app);
+    const provider = new GoogleAuthProvider();
+    try {
+      await signInWithPopup(auth, provider);
+    } catch (err) {
+      alert("Google sign-in failed: " + err.message);
+    }
+  };
+
+  // Email link sign-in handler
+  const handleSendLoginLink = async (e) => {
+    e.preventDefault();
+    const auth = getAuth(app);
+    const email = emailRef.current.value;
+    const actionCodeSettings = {
+      url: window.location.href,
+      handleCodeInApp: true,
+    };
+    try {
+      await sendSignInLinkToEmail(auth, email, actionCodeSettings);
+      window.localStorage.setItem("emailForSignIn", email);
+      alert("Login link sent! Check your email.");
+    } catch (err) {
+      alert("Failed to send login link: " + err.message);
+    }
+  };
 
   useEffect(() => {
-    if (!db || !isAuthReady || !userId) {
-      if (isAuthReady && (!db || !userId)) {
-        // If auth is ready but db/userId is missing
+    if (!db || !isAuthReady) {
+      if (isAuthReady && !db) {
         setLoading(false);
-        // setError("Database or User ID not available."); // Optional: set an error
       }
       return;
     }
@@ -38,7 +72,7 @@ const PostList = ({ onSelectPost, navigate }) => {
       setLoading(false);
       return;
     }
-    const postsCollectionPath = `artifacts/${appId}/users/${userId}/posts`;
+    const postsCollectionPath = `artifacts/${appId}/users/${process.env.REACT_APP_ADMIN_USER_UID}/posts`;
     const postsCollectionRef = collection(db, postsCollectionPath);
     const q = query(postsCollectionRef);
 
@@ -50,7 +84,6 @@ const PostList = ({ onSelectPost, navigate }) => {
             id: doc.id,
             ...doc.data(),
           }));
-          // Sort posts by createdAt in descending order (newest first) in memory
           postsData.sort(
             (a, b) =>
               (b.createdAt?.toDate?.() || 0) - (a.createdAt?.toDate?.() || 0)
@@ -70,8 +103,8 @@ const PostList = ({ onSelectPost, navigate }) => {
       }
     );
 
-    return () => unsubscribe(); // Cleanup listener on unmount
-  }, [db, isAuthReady, userId]);
+    return () => unsubscribe();
+  }, [db, isAuthReady]);
 
   if (loading)
     return (
@@ -200,8 +233,6 @@ const PostList = ({ onSelectPost, navigate }) => {
 
       {/* Sidebar Area */}
       <aside className="lg:w-1/3 space-y-6 lg:pt-0">
-        {" "}
-        {/* Adjusted padding for consistency */}
         <div className="p-5 sm:p-6 bg-white rounded-xl shadow-sm border border-gray-200">
           <div className="flex items-center mb-4">
             <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg bg-indigo-100 mr-3 sm:mr-4 flex items-center justify-center overflow-hidden">
@@ -222,21 +253,70 @@ const PostList = ({ onSelectPost, navigate }) => {
             nature of our reality, share hard-earned knowledge, and take
             creative swings within my reach.
           </p>
-          <button className="w-full bg-green-500 hover:bg-green-600 text-white font-semibold py-2.5 px-4 rounded-lg transition duration-300 ease-in-out flex items-center justify-center text-sm sm:text-base">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 20 20"
-              fill="currentColor"
-              className="w-4 h-4 sm:w-5 sm:h-5 mr-2"
-            >
-              <path
-                fillRule="evenodd"
-                d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z"
-                clipRule="evenodd"
-              />
-            </svg>
-            Subscribed
-          </button>
+          {user ? (
+            <button className="w-full bg-green-500 hover:bg-green-600 text-white font-semibold py-2.5 px-4 rounded-lg transition duration-300 ease-in-out flex items-center justify-center text-sm sm:text-base">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 20 20"
+                fill="currentColor"
+                className="w-4 h-4 sm:w-5 sm:h-5 mr-2"
+              >
+                <path
+                  fillRule="evenodd"
+                  d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z"
+                  clipRule="evenodd"
+                />
+              </svg>
+              Subscribed
+            </button>
+          ) : (
+            <div className="space-y-3">
+              <button
+                onClick={handleGoogleSignIn}
+                className="w-full bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2.5 px-4 rounded-lg transition duration-300 ease-in-out flex items-center justify-center text-sm sm:text-base"
+              >
+                <svg className="w-4 h-4 mr-2" viewBox="0 0 48 48">
+                  <g>
+                    <path
+                      fill="#4285F4"
+                      d="M44.5 20H24v8.5h11.7C34.8 33.1 30.1 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.1 8.1 2.9l6.1-6.1C34.5 6.5 29.6 4.5 24 4.5 12.7 4.5 3.5 13.7 3.5 25S12.7 45.5 24 45.5c11.3 0 20.5-9.2 20.5-20.5 0-1.4-.1-2.7-.3-4z"
+                    />
+                    <path
+                      fill="#34A853"
+                      d="M6.3 14.7l7 5.1C15.3 16.1 19.3 13.5 24 13.5c3.1 0 5.9 1.1 8.1 2.9l6.1-6.1C34.5 6.5 29.6 4.5 24 4.5c-7.2 0-13.3 4.1-16.7 10.2z"
+                    />
+                    <path
+                      fill="#FBBC05"
+                      d="M24 45.5c5.6 0 10.5-1.9 14.4-5.1l-6.7-5.5c-2 1.4-4.6 2.2-7.7 2.2-6.1 0-11.2-4.1-13-9.6l-7 5.4C6.7 41.1 14.7 45.5 24 45.5z"
+                    />
+                    <path
+                      fill="#EA4335"
+                      d="M44.5 20H24v8.5h11.7c-1.2 3.2-4.1 5.5-7.7 5.5-4.6 0-8.4-3.8-8.4-8.5s3.8-8.5 8.4-8.5c2.5 0 4.7.9 6.3 2.4l6.1-6.1C38.1 10.1 31.6 7.5 24 7.5c-8.7 0-16.1 5.9-18.7 14.2l7 5.1C15.3 16.1 19.3 13.5 24 13.5c3.1 0 5.9 1.1 8.1 2.9l6.1-6.1C34.5 6.5 29.6 4.5 24 4.5z"
+                    />
+                  </g>
+                </svg>
+                Sign in with Google
+              </button>
+              <form
+                onSubmit={handleSendLoginLink}
+                className="flex flex-col gap-2"
+              >
+                <input
+                  ref={emailRef}
+                  type="email"
+                  required
+                  placeholder="Email for login link"
+                  className="border border-gray-300 rounded px-3 py-2 text-sm"
+                />
+                <button
+                  type="submit"
+                  className="w-full bg-indigo-500 hover:bg-indigo-600 text-white font-semibold py-2 rounded-lg transition duration-300 ease-in-out text-sm"
+                >
+                  Send Login Link
+                </button>
+              </form>
+            </div>
+          )}
         </div>
       </aside>
     </div>

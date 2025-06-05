@@ -40,7 +40,13 @@ const AdminPanel = () => {
   const quillRef = useRef(null); // Ref for ReactQuill component
 
   useEffect(() => {
-    if (!db || !isAuthReady || !user || !userId) return;
+    if (
+      !db ||
+      !isAuthReady ||
+      user?.uid !== process.env.REACT_APP_ADMIN_USER_UID ||
+      !userId
+    )
+      return;
     logEvent(analytics, "admin_panel_opened");
     const postsCollectionRef = collection(
       db,

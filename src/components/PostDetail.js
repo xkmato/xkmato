@@ -1,20 +1,40 @@
+import { ChatBubbleOvalLeftIcon, HeartIcon } from "@heroicons/react/24/outline";
 import {
-  ArrowPathRoundedSquareIcon,
-  ChatBubbleOvalLeftIcon,
-  HeartIcon,
-} from "@heroicons/react/24/outline";
-import { doc, getDoc } from "firebase/firestore";
+  getAuth,
+  GoogleAuthProvider,
+  sendSignInLinkToEmail,
+  signInWithPopup,
+} from "firebase/auth";
+import {
+  addDoc,
+  collection,
+  deleteDoc,
+  doc,
+  collection as fsCollection,
+  getDoc,
+  onSnapshot,
+  orderBy,
+  query,
+  setDoc,
+} from "firebase/firestore";
 import { useContext, useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { FirebaseContext } from "../App";
 
 const PostDetail = ({ onBack }) => {
-  const { db } = useContext(FirebaseContext);
+  const { db, user } = useContext(FirebaseContext); // Ensure user is provided in context
   const { userId, postId } = useParams();
   const [post, setPost] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showShare, setShowShare] = useState(false);
+  const [likeCount, setLikeCount] = useState(0);
+  const [liked, setLiked] = useState(false);
+  const [showLogin, setShowLogin] = useState(false);
+  const [commentText, setCommentText] = useState("");
+  const [comments, setComments] = useState([]);
+  const [commentLoading, setCommentLoading] = useState(true);
+  const [commentError, setCommentError] = useState(null);
   const shareUrl = window.location.href;
   const shareTitle = post?.title || "Check out this post!";
 
@@ -55,6 +75,108 @@ const PostDetail = ({ onBack }) => {
         setLoading(false);
       });
   }, [db, userId, postId]);
+
+  // Fetch like count and whether current user liked
+  useEffect(() => {
+    if (!db || !userId || !postId) return;
+    const likesCol = collection(
+      db,
+      `artifacts/${process.env.REACT_APP_FIREBASE_APP_ID}/users/${userId}/posts/${postId}/likes`
+    );
+    getDoc(doc(likesCol, user?.uid || "dummy")).then((docSnap) => {
+      setLiked(!!user && docSnap.exists());
+    });
+    // Count likes
+    import("firebase/firestore").then(({ getCountFromServer }) => {
+      getCountFromServer(likesCol).then((snap) =>
+        setLikeCount(snap.data().count)
+      );
+    });
+  }, [db, userId, postId, user]);
+
+  // Like/unlike handler
+  const handleLike = async () => {
+    if (!user) {
+      setShowLogin(true);
+      return;
+    }
+    const likesCol = collection(
+      db,
+      `artifacts/${process.env.REACT_APP_FIREBASE_APP_ID}/users/${userId}/posts/${postId}/likes`
+    );
+    const likeDoc = doc(likesCol, user.uid);
+    if (liked) {
+      await deleteDoc(likeDoc);
+      setLiked(false);
+      setLikeCount((c) => c - 1);
+    } else {
+      await setDoc(likeDoc, { likedAt: new Date() });
+      setLiked(true);
+      setLikeCount((c) => c + 1);
+    }
+  };
+
+  // Google login
+  const handleGoogleLogin = async () => {
+    const auth = getAuth();
+    await signInWithPopup(auth, new GoogleAuthProvider());
+    setShowLogin(false);
+  };
+
+  // Email magic link login
+  const handleEmailMagicLink = async () => {
+    const email = prompt("Enter your email for magic link:");
+    if (!email) return;
+    const auth = getAuth();
+    await sendSignInLinkToEmail(auth, email, {
+      url: window.location.href,
+      handleCodeInApp: true,
+    });
+    alert("Check your email for the magic link!");
+    setShowLogin(false);
+  };
+
+  // Fetch comments in real-time
+  useEffect(() => {
+    if (!db || !userId || !postId) return;
+    setCommentLoading(true);
+    setCommentError(null);
+    const commentsCol = fsCollection(
+      db,
+      `artifacts/${process.env.REACT_APP_FIREBASE_APP_ID}/users/${userId}/posts/${postId}/comments`
+    );
+    const q = query(commentsCol, orderBy("createdAt", "asc"));
+    const unsub = onSnapshot(
+      q,
+      (snap) => {
+        setComments(snap.docs.map((doc) => ({ id: doc.id, ...doc.data() })));
+        setCommentLoading(false);
+      },
+      (err) => {
+        setCommentError("Failed to load comments");
+        setCommentLoading(false);
+      }
+    );
+    return () => unsub();
+  }, [db, userId, postId]);
+
+  // Handle comment submit
+  const handleCommentSubmit = async (e) => {
+    e.preventDefault();
+    if (!user || !commentText.trim()) return;
+    const commentsCol = fsCollection(
+      db,
+      `artifacts/${process.env.REACT_APP_FIREBASE_APP_ID}/users/${userId}/posts/${postId}/comments`
+    );
+    await addDoc(commentsCol, {
+      text: commentText.trim(),
+      createdAt: new Date(),
+      authorId: user.uid,
+      authorName: user.displayName || "Anonymous",
+      authorImageUrl: user.photoURL || "",
+    });
+    setCommentText("");
+  };
 
   if (loading) return <div>Loading...</div>;
   if (error) return <div>{error}</div>;
@@ -114,16 +236,23 @@ const PostDetail = ({ onBack }) => {
       {/* Action icons row */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-4">
-          <button className="group flex items-center" aria-label="Like">
-            <HeartIcon className="w-6 h-6 text-gray-400 group-hover:text-red-500 transition" />
+          <button
+            className={`group flex items-center ${liked ? "text-red-500" : ""}`}
+            aria-label="Like"
+            onClick={handleLike}
+          >
+            <HeartIcon
+              className={`w-6 h-6 ${
+                liked ? "text-red-500" : "text-gray-400"
+              } group-hover:text-red-500 transition`}
+            />
           </button>
+          <span className="ml-2 text-gray-500 text-sm font-medium">
+            {likeCount}
+          </span>
           <button className="group flex items-center" aria-label="Comment">
             <ChatBubbleOvalLeftIcon className="w-6 h-6 text-gray-400 group-hover:text-blue-500 transition" />
           </button>
-          <button className="group flex items-center" aria-label="Repost">
-            <ArrowPathRoundedSquareIcon className="w-6 h-6 text-gray-400 group-hover:text-green-500 transition" />
-          </button>
-          <span className="ml-2 text-gray-500 text-sm font-medium">1</span>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -243,6 +372,36 @@ const PostDetail = ({ onBack }) => {
         </div>
       )}
 
+      {/* Login Popup */}
+      {showLogin && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
+          <div className="bg-white rounded-2xl shadow-2xl p-8 min-w-[300px] flex flex-col gap-4 border border-gray-100 relative">
+            <button
+              className="absolute top-3 right-3 text-gray-400 hover:text-gray-700 transition"
+              onClick={() => setShowLogin(false)}
+              aria-label="Close"
+            >
+              ×
+            </button>
+            <h3 className="text-xl font-bold mb-2 text-center text-gray-800">
+              Log in to like posts
+            </h3>
+            <button
+              className="w-full bg-blue-600 text-white py-2 rounded-lg font-semibold mb-2"
+              onClick={handleGoogleLogin}
+            >
+              Continue with Google
+            </button>
+            <button
+              className="w-full bg-gray-100 text-gray-800 py-2 rounded-lg font-semibold"
+              onClick={handleEmailMagicLink}
+            >
+              Email Magic Link
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Divider */}
       <hr className="mb-6 border-gray-200" />
 
@@ -263,6 +422,78 @@ const PostDetail = ({ onBack }) => {
         style={{ whiteSpace: "pre-wrap" }}
         dangerouslySetInnerHTML={{ __html: post.content }}
       />
+
+      {/* Divider */}
+      <hr className="mb-6 border-gray-200" />
+
+      {/* Comments Section */}
+      <div className="mb-8">
+        <h2 className="text-lg font-bold mb-2">Comments</h2>
+        {commentLoading && (
+          <div className="text-gray-500 text-sm">Loading comments...</div>
+        )}
+        {commentError && (
+          <div className="text-red-500 text-sm">{commentError}</div>
+        )}
+        {comments.length === 0 && !commentLoading && (
+          <div className="text-gray-400 text-sm">No comments yet.</div>
+        )}
+        <ul className="space-y-4 mb-4">
+          {comments.map((c) => (
+            <li key={c.id} className="flex items-start gap-3">
+              {c.authorImageUrl && (
+                <img
+                  src={c.authorImageUrl}
+                  alt={c.authorName}
+                  className="w-8 h-8 rounded-full object-cover"
+                  onError={(e) => {
+                    e.target.onerror = null;
+                    e.target.style.display = "none";
+                  }}
+                />
+              )}
+              <div>
+                <div className="text-xs font-semibold text-gray-700">
+                  {c.authorName}
+                </div>
+                <div className="text-sm text-gray-800">{c.text}</div>
+                <div className="text-xs text-gray-400">
+                  {c.createdAt?.toDate
+                    ? new Date(c.createdAt.toDate()).toLocaleString()
+                    : ""}
+                </div>
+              </div>
+            </li>
+          ))}
+        </ul>
+        {user ? (
+          <form onSubmit={handleCommentSubmit} className="flex gap-2">
+            <input
+              type="text"
+              className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm"
+              placeholder="Add a comment..."
+              value={commentText}
+              onChange={(e) => setCommentText(e.target.value)}
+              maxLength={500}
+              required
+            />
+            <button
+              type="submit"
+              className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-blue-700 transition"
+              disabled={!commentText.trim()}
+            >
+              Post
+            </button>
+          </form>
+        ) : (
+          <div className="text-gray-500 text-sm">
+            <button className="underline" onClick={() => setShowLogin(true)}>
+              Log in
+            </button>{" "}
+            to comment.
+          </div>
+        )}
+      </div>
     </div>
   );
 };
