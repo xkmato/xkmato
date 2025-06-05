@@ -8,7 +8,13 @@ import {
   query,
   updateDoc,
 } from "firebase/firestore";
-import { useContext, useEffect, useState } from "react";
+import {
+  ref as firebaseStorageRef,
+  getDownloadURL,
+  getStorage,
+  uploadBytesResumable,
+} from "firebase/storage"; // Firebase Storage imports
+import { useContext, useEffect, useRef, useState } from "react"; // Added useRef
 import ReactQuill from "react-quill-new"; // Import ReactQuill
 import "react-quill-new/dist/quill.snow.css"; // Import Quill's CSS
 import { FirebaseContext, analytics } from "../App";
@@ -16,18 +22,22 @@ import { FirebaseContext, analytics } from "../App";
 const appId = process.env.REACT_APP_FIREBASE_APP_ID;
 
 const AdminPanel = () => {
-  const { db, user, userId, isAuthReady } = useContext(FirebaseContext);
+  const { db, user, userId, isAuthReady, app } = useContext(FirebaseContext); // Ensure 'storage' is provided by FirebaseContext
+  // If 'storage' is not in FirebaseContext, you might initialize it:
+  const storage = getStorage(app); // Make sure your Firebase app is initialized
+
   const [posts, setPosts] = useState([]);
   const [selectedPost, setSelectedPost] = useState(null);
-  // const [formTitle, setFormTitle] = useState(""); // Removed
+  const [formTitle, setFormTitle] = useState("");
   const [formContent, setFormContent] = useState("");
-  // const [formImageUrl, setFormImageUrl] = useState(""); // Removed
   const [message, setMessage] = useState("");
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true); // For general loading like fetching/saving posts
+  const [imageUploading, setImageUploading] = useState(false); // Specific state for image uploads
   const [showModal, setShowModal] = useState(false);
-  const [modalType, setModalType] = useState(""); // 'confirmDelete' or 'info'
+  const [modalType, setModalType] = useState("");
   const [modalMessage, setModalMessage] = useState("");
   const [postToDelete, setPostToDelete] = useState(null);
+  const quillRef = useRef(null); // Ref for ReactQuill component
 
   useEffect(() => {
     if (!db || !isAuthReady || !user || !userId) return;
@@ -70,25 +80,117 @@ const AdminPanel = () => {
 
   const resetForm = () => {
     setSelectedPost(null);
-    // setFormTitle(""); // Removed
+    setFormTitle("");
     setFormContent("");
-    // setFormImageUrl(""); // Removed
     setMessage("");
+  };
+
+  // Custom Image Handler for ReactQuill
+  const imageHandler = () => {
+    if (!storage) {
+      setMessage("Firebase Storage is not initialized. Cannot upload image.");
+      // Potentially show a modal or a more persistent error
+      return;
+    }
+    if (!userId) {
+      setMessage("User not authenticated. Cannot upload image.");
+      return;
+    }
+    if (!quillRef.current) {
+      setMessage("Editor not ready. Please try again.");
+      return;
+    }
+
+    const input = document.createElement("input");
+    input.setAttribute("type", "file");
+    input.setAttribute("accept", "image/*");
+    input.click();
+
+    input.onchange = async () => {
+      const file = input.files[0];
+      if (!file) {
+        return;
+      }
+
+      if (file.size > 5 * 1024 * 1024) {
+        // Example: 5MB limit for individual images
+        setMessage("Image file is too large. Maximum 5MB allowed per image.");
+        return;
+      }
+
+      setImageUploading(true);
+      setMessage("Uploading image...");
+
+      const imagePath = `users/${userId}/images/${Date.now()}_${file.name}`;
+      const imageRef = firebaseStorageRef(storage, imagePath);
+      const uploadTask = uploadBytesResumable(imageRef, file);
+
+      uploadTask.on(
+        "state_changed",
+        (snapshot) => {
+          const progress =
+            (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+          setMessage(`Uploading image: ${Math.round(progress)}%`);
+        },
+        (error) => {
+          console.error("Image upload error:", error);
+          setMessage(
+            `Image upload failed: ${error.message}. Ensure storage rules allow writes.`
+          );
+          setImageUploading(false);
+        },
+        () => {
+          getDownloadURL(uploadTask.snapshot.ref)
+            .then((downloadURL) => {
+              const editor = quillRef.current.getEditor();
+              const range = editor.getSelection(true); // Get current cursor position or default to end
+              editor.insertEmbed(range.index, "image", downloadURL);
+              editor.setSelection(range.index + 1); // Move cursor after the inserted image
+              setMessage("Image uploaded and inserted successfully!");
+              setImageUploading(false);
+            })
+            .catch((error) => {
+              console.error("Error getting download URL:", error);
+              setMessage(
+                `Error retrieving image URL after upload: ${error.message}`
+              );
+              setImageUploading(false);
+            });
+        }
+      );
+    };
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (imageUploading) {
+      setMessage("Please wait for the image to finish uploading.");
+      return;
+    }
     if (!db || !user || !userId) {
       setMessage("Authentication required to save posts.");
       return;
     }
 
-    // if (!formTitle || !formContent) { // Modified validation
-    if (!formContent) {
-      // setMessage("Title and Content cannot be empty."); // Modified message
-      setMessage("Content cannot be empty.");
+    if (!formTitle || !formContent) {
+      setMessage("Title and Content cannot be empty.");
       return;
     }
+
+    const contentByteLength = new TextEncoder().encode(formContent).length;
+    const MAX_FIRESTORE_FIELD_BYTES = 1048487; // Approx 1MB
+
+    if (contentByteLength > MAX_FIRESTORE_FIELD_BYTES) {
+      const currentSizeKB = Math.round(contentByteLength / 1024);
+      const maxSizeKB = Math.round(MAX_FIRESTORE_FIELD_BYTES / 1024);
+      setMessage(
+        `Error: Post content is too large (${currentSizeKB}KB). The maximum size is ~${maxSizeKB}KB. Images are stored separately, but the text and image links must fit this limit.`
+      );
+      return;
+    }
+
+    setLoading(true);
+    setMessage(selectedPost ? "Updating post..." : "Creating post...");
 
     try {
       if (selectedPost) {
@@ -98,9 +200,8 @@ const AdminPanel = () => {
           selectedPost.id
         );
         await updateDoc(postRef, {
-          // title: formTitle, // Removed
+          title: formTitle,
           content: formContent,
-          // imageUrl: formImageUrl, // Removed
           updatedAt: new Date(),
         });
         setMessage("Post updated successfully!");
@@ -108,9 +209,8 @@ const AdminPanel = () => {
         await addDoc(
           collection(db, `artifacts/${appId}/users/${userId}/posts`),
           {
-            // title: formTitle, // Removed
+            title: formTitle,
             content: formContent,
-            // imageUrl: formImageUrl, // Removed
             createdAt: new Date(),
             updatedAt: new Date(),
           }
@@ -121,12 +221,14 @@ const AdminPanel = () => {
     } catch (error) {
       console.error("Error saving post:", error);
       setMessage(`Error saving post: ${error.message}`);
+    } finally {
+      setLoading(false);
     }
   };
 
   const handleEdit = (post) => {
     setSelectedPost(post);
-    // setFormTitle(post.title); // Removed
+    setFormTitle(post.title); // Restored
     setFormContent(post.content);
     // setFormImageUrl(post.imageUrl || ""); // Removed
     setMessage("");
@@ -170,7 +272,8 @@ const AdminPanel = () => {
     setPostToDelete(null);
   };
 
-  if (loading)
+  if (loading && posts.length === 0)
+    // Show initial loading only if posts aren't there yet
     return (
       <div className="text-center text-gray-600 mt-8">
         Loading admin panel...
@@ -185,13 +288,18 @@ const AdminPanel = () => {
 
   // Define modules and formats for ReactQuill
   const quillModules = {
-    toolbar: [
-      [{ header: [1, 2, false] }],
-      ["bold", "italic", "underline", "strike", "blockquote"],
-      [{ list: "ordered" }, { list: "bullet" }],
-      ["link", "image"], // Enable image button
-      ["clean"],
-    ],
+    toolbar: {
+      container: [
+        [{ header: [1, 2, false] }],
+        ["bold", "italic", "underline", "strike", "blockquote"],
+        [{ list: "ordered" }, { list: "bullet" }],
+        ["link", "image"], // 'image' will now use our custom handler
+        ["clean"],
+      ],
+      handlers: {
+        image: imageHandler, // Register the custom image handler
+      },
+    },
   };
 
   const quillFormats = [
@@ -202,9 +310,8 @@ const AdminPanel = () => {
     "strike",
     "blockquote",
     "list",
-    "bullet",
     "link",
-    "image",
+    "image", // Ensure 'image' format is allowed
   ];
 
   return (
@@ -238,8 +345,8 @@ const AdminPanel = () => {
           {selectedPost ? "Edit Post" : "Create New Post"}
         </h3>
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Title Input Removed */}
-          {/* <div>
+          {/* Title Input Restored */}
+          <div>
             <label
               htmlFor="title"
               className="block text-gray-700 text-sm font-bold mb-2"
@@ -254,7 +361,7 @@ const AdminPanel = () => {
               className="border border-gray-300 rounded-lg w-full py-2 px-3 text-gray-800 leading-tight focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent"
               required
             />
-          </div> */}
+          </div>
           <div>
             {/* <label
               htmlFor="content" // Label might be redundant now if it's the only main field
@@ -263,39 +370,26 @@ const AdminPanel = () => {
               Content:
             </label> */}
             <ReactQuill
+              ref={quillRef} // Assign the ref here
               theme="snow"
               value={formContent}
               onChange={setFormContent}
               modules={quillModules}
               formats={quillFormats}
-              className="bg-white rounded-lg shadow-sm border border-gray-300 min-h-[300px]" // Added min-h for a larger editor feel
-              placeholder="Start writing your post..." // Added placeholder
-              // 'required' prop might not work directly on ReactQuill for validation. Validation is handled in handleSubmit.
+              className="bg-white rounded-lg shadow-sm border border-gray-300 min-h-[300px]"
+              placeholder="Start writing your post..."
             />
           </div>
           {/* Image URL Input Removed */}
-          {/* <div>
-            <label
-              htmlFor="imageUrl"
-              className="block text-gray-700 text-sm font-bold mb-2"
-            >
-              Image URL (Optional):
-            </label>
-            <input
-              type="url"
-              id="imageUrl"
-              value={formImageUrl}
-              onChange={(e) => setFormImageUrl(e.target.value)}
-              className="shadow appearance-none border rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-purple-500"
-              placeholder="e.g., https://example.com/image.jpg"
-            />
-          </div> */}
           <div className="flex space-x-4 pt-4">
-            {" "}
-            {/* Added pt-4 for spacing */}
             <button
               type="submit"
-              className="bg-gray-800 hover:bg-gray-700 text-white font-bold py-2 px-6 rounded-lg transition duration-300 ease-in-out shadow-md"
+              className={`bg-gray-800 hover:bg-gray-700 text-white font-bold py-2 px-6 rounded-lg transition duration-300 ease-in-out shadow-md ${
+                imageUploading || (loading && !posts.length === 0)
+                  ? "opacity-50 cursor-not-allowed"
+                  : ""
+              }`}
+              disabled={imageUploading || (loading && !posts.length === 0)}
             >
               {selectedPost ? "Update Post" : "Create Post"}
             </button>

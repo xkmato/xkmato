@@ -1,0 +1,13 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Match the path structure used in your imageHandler
+    // Allow reads to any file under users/{userId}/images/
+    // You might want to restrict this further if images aren't meant to be public
+    match /users/{userId}/images/{allPaths=**} {
+      allow read: if true; // Or use `if request.auth != null;` to allow only authenticated users to read
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+  }
+}

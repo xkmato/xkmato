@@ -86,9 +86,12 @@ const PostList = ({ onSelectPost, navigate }) => {
             <h2 className="text-2xl font-bold text-gray-800 mb-2">
               {post.title}
             </h2>
-            <p className="text-gray-600 text-sm mb-3 line-clamp-3">
-              {post.content}
-            </p>
+            <div
+              className="text-gray-600 text-sm mb-3 line-clamp-3 prose"
+              dangerouslySetInnerHTML={{ __html: post.content }}
+            >
+              {/* {post.content} */}
+            </div>
             {post.createdAt && (
               <p className="text-gray-500 text-xs mt-2">
                 Published:{" "}

@@ -31,8 +31,9 @@ const PostDetail = ({ post, onBack }) => {
       <div
         className="prose max-w-none text-gray-700 leading-relaxed"
         style={{ whiteSpace: "pre-wrap" }}
+        dangerouslySetInnerHTML={{ __html: post.content }}
       >
-        {post.content}
+        {/* {post.content} */}
       </div>
     </div>
   );
