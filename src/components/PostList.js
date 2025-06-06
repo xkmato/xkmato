@@ -26,6 +26,7 @@ const PostList = ({ onSelectPost, navigate }) => {
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [activeTab, setActiveTab] = useState("Latest");
   const emailRef = useRef();
 
   // Google Sign-In handler
@@ -113,8 +114,76 @@ const PostList = ({ onSelectPost, navigate }) => {
   if (error)
     return <div className="text-center text-red-500 mt-8">Error: {error}</div>;
 
-  const featuredPost = posts.length > 0 ? posts[0] : null;
-  const otherPosts = posts.slice(1);
+  // Get unique tags from all posts (first 5)
+  const getTopTags = () => {
+    const tagCounts = {};
+
+    posts.forEach((post) => {
+      if (post.tags && Array.isArray(post.tags)) {
+        post.tags.forEach((tag) => {
+          const key = `${tag.categoryName}:${tag.name}`;
+          tagCounts[key] = (tagCounts[key] || 0) + 1;
+        });
+      }
+    });
+
+    // Sort by count and take first 5
+    return Object.entries(tagCounts)
+      .sort(([, a], [, b]) => b - a)
+      .slice(0, 5)
+      .map(([tagKey]) => {
+        const [categoryName, tagName] = tagKey.split(":");
+        return {
+          categoryName,
+          name: tagName,
+          displayName: `${tagName} (${categoryName})`,
+        };
+      });
+  };
+
+  const topTags = getTopTags();
+
+  // Filter posts based on active tab
+  const getFilteredPosts = () => {
+    if (activeTab === "Latest") {
+      return posts;
+    } else if (activeTab === "Top") {
+      // You can implement your own "Top" logic here
+      // For now, just return posts sorted by some criteria
+      return [...posts].sort((a, b) => (b.views || 0) - (a.views || 0));
+    } else if (activeTab === "Others") {
+      // Show posts that don't have any of the top 5 tags
+      return posts.filter((post) => {
+        if (!post.tags || !Array.isArray(post.tags)) return true;
+
+        const postTagKeys = post.tags.map(
+          (tag) => `${tag.categoryName}:${tag.name}`
+        );
+        const topTagKeys = topTags.map(
+          (tag) => `${tag.categoryName}:${tag.name}`
+        );
+
+        return !postTagKeys.some((key) => topTagKeys.includes(key));
+      });
+    } else {
+      // Filter by selected tag
+      const selectedTag = topTags.find((tag) => tag.displayName === activeTab);
+      if (!selectedTag) return posts;
+
+      return posts.filter((post) => {
+        if (!post.tags || !Array.isArray(post.tags)) return false;
+        return post.tags.some(
+          (tag) =>
+            tag.categoryName === selectedTag.categoryName &&
+            tag.name === selectedTag.name
+        );
+      });
+    }
+  };
+
+  const filteredPosts = getFilteredPosts();
+  const featuredPost = filteredPosts.length > 0 ? filteredPosts[0] : null;
+  const otherPosts = filteredPosts.slice(1);
 
   const getExcerpt = (content, length = 70) => {
     if (!content) return "";
@@ -152,36 +221,66 @@ const PostList = ({ onSelectPost, navigate }) => {
               {featuredPost.title}
             </h1>
             <p className="text-gray-700 text-base md:text-lg mb-3">
-              {featuredPost.subtitle || "We see what we believe."}{" "}
-              {/* Placeholder or use actual subtitle field */}
+              {featuredPost.subtitle || "We see what we believe."}
             </p>
             {featuredPost.createdAt && (
               <p className="text-gray-500 text-xs md:text-sm">
-                {formatDate(featuredPost.createdAt)} • XKMATO{" "}
-                {/* Assuming author is XKMATO */}
+                {formatDate(featuredPost.createdAt)} • XKMATO
               </p>
             )}
           </div>
         )}
 
         {/* Tab Navigation */}
-        <div className="flex items-center border-b border-gray-300 pb-2">
-          <button className="py-2 px-3 text-sm font-semibold text-gray-900 border-b-2 border-gray-900">
+        <div className="flex items-center border-b border-gray-300 pb-2 overflow-x-auto">
+          {/* Latest Tab */}
+          <button
+            onClick={() => setActiveTab("Latest")}
+            className={`py-2 px-3 text-sm font-medium whitespace-nowrap ${
+              activeTab === "Latest"
+                ? "font-semibold text-gray-900 border-b-2 border-gray-900"
+                : "text-gray-600 hover:text-gray-900"
+            }`}
+          >
             Latest
           </button>
-          <button className="py-2 px-3 text-sm font-medium text-gray-600 hover:text-gray-900">
+
+          {/* Top Tab */}
+          <button
+            onClick={() => setActiveTab("Top")}
+            className={`py-2 px-3 text-sm font-medium whitespace-nowrap ${
+              activeTab === "Top"
+                ? "font-semibold text-gray-900 border-b-2 border-gray-900"
+                : "text-gray-600 hover:text-gray-900"
+            }`}
+          >
             Top
           </button>
-          <button className="py-2 px-3 text-sm font-medium text-gray-600 hover:text-gray-900">
-            The Mortals (Book)
-          </button>
-          <button className="py-2 px-3 text-sm font-medium text-gray-600 hover:text-gray-900">
-            Bukalabi (Book)
-          </button>
-          <button className="py-2 px-3 text-sm font-medium text-gray-600 hover:text-gray-900">
-            Web3 (Topic)
-          </button>
-          <button className="py-2 px-3 text-sm font-medium text-gray-600 hover:text-gray-900">
+
+          {/* Dynamic Top 5 Tags */}
+          {topTags.map((tag) => (
+            <button
+              key={tag.displayName}
+              onClick={() => setActiveTab(tag.displayName)}
+              className={`py-2 px-3 text-sm font-medium whitespace-nowrap ${
+                activeTab === tag.displayName
+                  ? "font-semibold text-gray-900 border-b-2 border-gray-900"
+                  : "text-gray-600 hover:text-gray-900"
+              }`}
+            >
+              {tag.displayName}
+            </button>
+          ))}
+
+          {/* Others Tab */}
+          <button
+            onClick={() => setActiveTab("Others")}
+            className={`py-2 px-3 text-sm font-medium whitespace-nowrap ${
+              activeTab === "Others"
+                ? "font-semibold text-gray-900 border-b-2 border-gray-900"
+                : "text-gray-600 hover:text-gray-900"
+            }`}
+          >
             Others
           </button>
         </div>
@@ -203,15 +302,12 @@ const PostList = ({ onSelectPost, navigate }) => {
                 </p>
                 {post.createdAt && (
                   <p className="text-gray-500 text-xs mt-1">
-                    {formatDate(post.createdAt)} • XKMATO{" "}
-                    {/* Assuming author is XKMATO */}
+                    {formatDate(post.createdAt)} • XKMATO
                   </p>
                 )}
               </div>
               {post.imageUrl && (
                 <div className="w-1/3 sm:w-32 md:w-40 lg:w-48 flex-shrink-0">
-                  {" "}
-                  {/* Fixed width for image container */}
                   <img
                     src={post.imageUrl}
                     alt={post.title}

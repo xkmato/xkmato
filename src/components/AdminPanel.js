@@ -22,22 +22,62 @@ import { FirebaseContext, analytics, app } from "../App";
 const appId = process.env.REACT_APP_FIREBASE_APP_ID;
 
 const AdminPanel = () => {
-  const { db, user, userId, isAuthReady } = useContext(FirebaseContext); // Ensure 'storage' is provided by FirebaseContext
-  // If 'storage' is not in FirebaseContext, you might initialize it:
-  const storage = getStorage(app); // Make sure your Firebase app is initialized
+  const { db, user, userId, isAuthReady } = useContext(FirebaseContext);
+  const storage = getStorage(app);
 
   const [posts, setPosts] = useState([]);
   const [selectedPost, setSelectedPost] = useState(null);
   const [formTitle, setFormTitle] = useState("");
   const [formContent, setFormContent] = useState("");
+  const [formTags, setFormTags] = useState([]); // Array of tag objects
+  const [availableCategories, setAvailableCategories] = useState([]);
+  const [availableTags, setAvailableTags] = useState([]);
+  const [selectedCategory, setSelectedCategory] = useState("");
+  const [selectedTag, setSelectedTag] = useState("");
+  const [newCategoryName, setNewCategoryName] = useState("");
+  const [newTagName, setNewTagName] = useState("");
+  const [showNewCategoryInput, setShowNewCategoryInput] = useState(false);
+  const [showNewTagInput, setShowNewTagInput] = useState(false);
   const [message, setMessage] = useState("");
-  const [loading, setLoading] = useState(true); // For general loading like fetching/saving posts
-  const [imageUploading, setImageUploading] = useState(false); // Specific state for image uploads
+  const [loading, setLoading] = useState(true);
+  const [imageUploading, setImageUploading] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [modalType, setModalType] = useState("");
   const [modalMessage, setModalMessage] = useState("");
   const [postToDelete, setPostToDelete] = useState(null);
-  const quillRef = useRef(null); // Ref for ReactQuill component
+  const quillRef = useRef(null);
+
+  // Load categories and tags
+  useEffect(() => {
+    if (!db || !isAuthReady || !userId) return;
+
+    const categoriesRef = collection(
+      db,
+      `artifacts/${appId}/users/${userId}/categories`
+    );
+    const tagsRef = collection(db, `artifacts/${appId}/users/${userId}/tags`);
+
+    const unsubscribeCategories = onSnapshot(categoriesRef, (snapshot) => {
+      const categories = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+      setAvailableCategories(categories);
+    });
+
+    const unsubscribeTags = onSnapshot(tagsRef, (snapshot) => {
+      const tags = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+      setAvailableTags(tags);
+    });
+
+    return () => {
+      unsubscribeCategories();
+      unsubscribeTags();
+    };
+  }, [db, userId, isAuthReady]);
 
   useEffect(() => {
     if (
@@ -69,13 +109,11 @@ const AdminPanel = () => {
           setPosts(postsData);
           setLoading(false);
         } catch (err) {
-          console.error("Error fetching posts for admin:", err);
           setMessage("Failed to load posts for admin.");
           setLoading(false);
         }
       },
       (err) => {
-        console.error("onSnapshot error for admin:", err);
         setMessage("Real-time updates failed for admin.");
         setLoading(false);
       }
@@ -88,7 +126,114 @@ const AdminPanel = () => {
     setSelectedPost(null);
     setFormTitle("");
     setFormContent("");
+    setFormTags([]);
+    setSelectedCategory("");
+    setSelectedTag("");
+    setNewCategoryName("");
+    setNewTagName("");
+    setShowNewCategoryInput(false);
+    setShowNewTagInput(false);
     setMessage("");
+  };
+
+  // Create new category
+  const handleCreateCategory = async () => {
+    if (!newCategoryName.trim()) {
+      setMessage("Category name cannot be empty.");
+      return;
+    }
+
+    try {
+      await addDoc(
+        collection(db, `artifacts/${appId}/users/${userId}/categories`),
+        {
+          name: newCategoryName.trim(),
+          createdAt: new Date(),
+          userId,
+        }
+      );
+      setMessage("Category created successfully!");
+      setNewCategoryName("");
+      setShowNewCategoryInput(false);
+    } catch (error) {
+      setMessage(`Error creating category: ${error.message}`);
+    }
+  };
+
+  // Create new tag
+  const handleCreateTag = async () => {
+    if (!newTagName.trim() || !selectedCategory) {
+      setMessage("Tag name and category selection are required.");
+      return;
+    }
+
+    const category = availableCategories.find(
+      (cat) => cat.id === selectedCategory
+    );
+    if (!category) {
+      setMessage("Selected category not found.");
+      return;
+    }
+
+    try {
+      await addDoc(collection(db, `artifacts/${appId}/users/${userId}/tags`), {
+        name: newTagName.trim(),
+        categoryId: selectedCategory,
+        categoryName: category.name,
+        createdAt: new Date(),
+        userId,
+      });
+      setMessage("Tag created successfully!");
+      setNewTagName("");
+      setShowNewTagInput(false);
+    } catch (error) {
+      setMessage(`Error creating tag: ${error.message}`);
+    }
+  };
+
+  // Add tag to post
+  const handleAddTag = () => {
+    if (!selectedTag) {
+      setMessage("Please select a tag.");
+      return;
+    }
+
+    const tag = availableTags.find((t) => t.id === selectedTag);
+
+    if (!tag) {
+      setMessage("Selected tag not found.");
+      return;
+    }
+
+    // Check if tag is already added
+    if (formTags.some((t) => t.id === tag.id)) {
+      setMessage("Tag already added to this post.");
+      return;
+    }
+
+    const newFormTags = [
+      ...formTags,
+      {
+        id: tag.id,
+        name: tag.name,
+        categoryId: tag.categoryId,
+        categoryName: tag.categoryName,
+      },
+    ];
+
+    setFormTags(newFormTags);
+    setSelectedTag("");
+  };
+
+  // Remove tag from post
+  const handleRemoveTag = (tagId) => {
+    setFormTags(formTags.filter((tag) => tag.id !== tagId));
+  };
+
+  // Get filtered tags based on selected category
+  const getFilteredTags = () => {
+    if (!selectedCategory) return availableTags;
+    return availableTags.filter((tag) => tag.categoryId === selectedCategory);
   };
 
   // Custom Image Handler for ReactQuill
@@ -139,7 +284,6 @@ const AdminPanel = () => {
           setMessage(`Uploading image: ${Math.round(progress)}%`);
         },
         (error) => {
-          console.error("Image upload error:", error);
           setMessage(
             `Image upload failed: ${error.message}. Ensure storage rules allow writes.`
           );
@@ -156,7 +300,6 @@ const AdminPanel = () => {
               setImageUploading(false);
             })
             .catch((error) => {
-              console.error("Error getting download URL:", error);
               setMessage(
                 `Error retrieving image URL after upload: ${error.message}`
               );
@@ -190,7 +333,7 @@ const AdminPanel = () => {
       const currentSizeKB = Math.round(contentByteLength / 1024);
       const maxSizeKB = Math.round(MAX_FIRESTORE_FIELD_BYTES / 1024);
       setMessage(
-        `Error: Post content is too large (${currentSizeKB}KB). The maximum size is ~${maxSizeKB}KB. Images are stored separately, but the text and image links must fit this limit.`
+        `Error: Post content is too large (${currentSizeKB}KB). The maximum size is ~${maxSizeKB}KB.`
       );
       return;
     }
@@ -199,35 +342,35 @@ const AdminPanel = () => {
     setMessage(selectedPost ? "Updating post..." : "Creating post...");
 
     try {
+      const postData = {
+        title: formTitle,
+        content: formContent,
+        tags: formTags, // Include tags array
+        updatedAt: new Date(),
+        userId,
+      };
+
       if (selectedPost) {
         const postRef = doc(
           db,
           `artifacts/${appId}/users/${userId}/posts`,
           selectedPost.id
         );
-        await updateDoc(postRef, {
-          title: formTitle,
-          content: formContent,
-          updatedAt: new Date(),
-          userId, // <-- Add this line
-        });
+        await updateDoc(postRef, postData);
         setMessage("Post updated successfully!");
       } else {
         await addDoc(
           collection(db, `artifacts/${appId}/users/${userId}/posts`),
           {
-            title: formTitle,
-            content: formContent,
+            ...postData,
             createdAt: new Date(),
-            updatedAt: new Date(),
-            userId, // <-- Add this line
           }
         );
+
         setMessage("Post created successfully!");
       }
       resetForm();
     } catch (error) {
-      console.error("Error saving post:", error);
       setMessage(`Error saving post: ${error.message}`);
     } finally {
       setLoading(false);
@@ -236,9 +379,9 @@ const AdminPanel = () => {
 
   const handleEdit = (post) => {
     setSelectedPost(post);
-    setFormTitle(post.title); // Restored
+    setFormTitle(post.title);
     setFormContent(post.content);
-    // setFormImageUrl(post.imageUrl || ""); // Removed
+    setFormTags(post.tags || []); // Load existing tags
     setMessage("");
   };
 
@@ -267,7 +410,6 @@ const AdminPanel = () => {
       setPostToDelete(null);
       setShowModal(false);
     } catch (error) {
-      console.error("Error deleting post:", error);
       setMessage(`Error deleting post: ${error.message}`);
       setShowModal(false);
     }
@@ -353,7 +495,7 @@ const AdminPanel = () => {
           {selectedPost ? "Edit Post" : "Create New Post"}
         </h3>
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Title Input Restored */}
+          {/* Title Input */}
           <div>
             <label
               htmlFor="title"
@@ -370,15 +512,180 @@ const AdminPanel = () => {
               required
             />
           </div>
+
+          {/* Tags Section */}
           <div>
-            {/* <label
-              htmlFor="content" // Label might be redundant now if it's the only main field
-              className="block text-gray-700 text-sm font-bold mb-2"
-            >
-              Content:
-            </label> */}
+            <label className="block text-gray-700 text-sm font-bold mb-2">
+              Tags:
+            </label>
+
+            {/* Category Management */}
+            <div className="mb-4 p-4 bg-gray-50 rounded-lg">
+              <h4 className="font-semibold text-gray-700 mb-2">
+                Categories & Tags
+              </h4>
+
+              {/* Create Category */}
+              <div className="mb-3">
+                {!showNewCategoryInput ? (
+                  <button
+                    type="button"
+                    onClick={() => setShowNewCategoryInput(true)}
+                    className="text-sm bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded"
+                  >
+                    + New Category
+                  </button>
+                ) : (
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={newCategoryName}
+                      onChange={(e) => setNewCategoryName(e.target.value)}
+                      placeholder="Category name"
+                      className="flex-1 px-2 py-1 border rounded text-sm"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleCreateCategory}
+                      className="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded text-sm"
+                    >
+                      Create
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowNewCategoryInput(false);
+                        setNewCategoryName("");
+                      }}
+                      className="bg-gray-400 hover:bg-gray-500 text-white px-3 py-1 rounded text-sm"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Category Selection */}
+              <div className="mb-3">
+                <select
+                  value={selectedCategory}
+                  onChange={(e) => {
+                    setSelectedCategory(e.target.value);
+                    setSelectedTag(""); // Reset tag selection when category changes
+                  }}
+                  className="w-full px-2 py-1 border rounded text-sm"
+                >
+                  <option value="">Select Category</option>
+                  {availableCategories.map((category) => (
+                    <option key={category.id} value={category.id}>
+                      {category.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Create Tag */}
+              {selectedCategory && (
+                <div className="mb-3">
+                  {!showNewTagInput ? (
+                    <button
+                      type="button"
+                      onClick={() => setShowNewTagInput(true)}
+                      className="text-sm bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded"
+                    >
+                      + New Tag
+                    </button>
+                  ) : (
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={newTagName}
+                        onChange={(e) => setNewTagName(e.target.value)}
+                        placeholder="Tag name"
+                        className="flex-1 px-2 py-1 border rounded text-sm"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleCreateTag}
+                        className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-sm"
+                      >
+                        Create
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowNewTagInput(false);
+                          setNewTagName("");
+                        }}
+                        className="bg-gray-400 hover:bg-gray-500 text-white px-3 py-1 rounded text-sm"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Tag Selection and Addition */}
+              {selectedCategory && (
+                <div className="flex gap-2">
+                  <select
+                    value={selectedTag}
+                    onChange={(e) => setSelectedTag(e.target.value)}
+                    className="flex-1 px-2 py-1 border rounded text-sm"
+                  >
+                    <option value="">Select Tag</option>
+                    {getFilteredTags().map((tag) => (
+                      <option key={tag.id} value={tag.id}>
+                        {tag.name}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={handleAddTag}
+                    className="bg-purple-500 hover:bg-purple-600 text-white px-3 py-1 rounded text-sm"
+                  >
+                    Add Tag
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Selected Tags Display */}
+            {formTags.length > 0 && (
+              <div className="mb-4">
+                <h5 className="text-sm font-semibold text-gray-700 mb-2">
+                  Selected Tags:
+                </h5>
+                <div className="flex flex-wrap gap-2">
+                  {formTags.map((tag) => (
+                    <span
+                      key={tag.id}
+                      className="inline-flex items-center bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full"
+                    >
+                      <span className="text-gray-500 text-xs mr-1">
+                        {tag.categoryName}:
+                      </span>
+                      {tag.name}
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveTag(tag.id)}
+                        className="ml-1 text-blue-600 hover:text-blue-800"
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Content Editor */}
+          <div>
             <ReactQuill
-              ref={quillRef} // Assign the ref here
+              ref={quillRef}
               theme="snow"
               value={formContent}
               onChange={setFormContent}
@@ -388,7 +695,8 @@ const AdminPanel = () => {
               placeholder="Start writing your post..."
             />
           </div>
-          {/* Image URL Input Removed */}
+
+          {/* Submit Buttons */}
           <div className="flex space-x-4 pt-4">
             <button
               type="submit"
@@ -414,7 +722,7 @@ const AdminPanel = () => {
         </form>
       </div>
 
-      {/* Post List for Admin */}
+      {/* Post List */}
       <div className="bg-white rounded-xl shadow-lg p-6">
         <h3 className="text-2xl font-semibold text-gray-800 mb-4">
           Your Posts
@@ -428,17 +736,32 @@ const AdminPanel = () => {
                 key={post.id}
                 className="py-4 flex items-center justify-between"
               >
-                <div>
+                <div className="flex-1">
                   <h4 className="text-lg font-medium text-gray-900">
-                    {/* This will need adjustment if post.title is no longer saved */}
                     {post.title || "Untitled Post"}
                   </h4>
                   <p
-                    className="text-sm text-gray-500 line-clamp-1"
+                    className="text-sm text-gray-500 line-clamp-1 mb-2"
                     dangerouslySetInnerHTML={{ __html: post.content }}
                   />
+                  {/* Display tags */}
+                  {post.tags && post.tags.length > 0 && (
+                    <div className="flex flex-wrap gap-1">
+                      {post.tags.map((tag) => (
+                        <span
+                          key={tag.id}
+                          className="inline-flex items-center bg-gray-100 text-gray-700 text-xs px-2 py-1 rounded"
+                        >
+                          <span className="text-gray-400 mr-1">
+                            {tag.categoryName}:
+                          </span>
+                          {tag.name}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
-                <div className="flex space-x-3">
+                <div className="flex space-x-3 ml-4">
                   <button
                     onClick={() => handleEdit(post)}
                     className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition duration-300 ease-in-out shadow-sm"
