@@ -140,7 +140,7 @@ const PostList = ({ onSelectPost, navigate }) => {
         count,
       };
 
-      if (categoryName === "book") {
+      if (categoryName === "Book") {
         bookTags.push(tagData);
       } else {
         otherTags.push(tagData);
