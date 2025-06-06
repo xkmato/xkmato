@@ -5,39 +5,74 @@
     <link rel="icon" href="%PUBLIC_URL%/favicon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#000000" />
+
+    <!-- SEO Meta Tags -->
+    <title>
+      XKMato - Thinking Out Loud About Reality, Knowledge & Creativity
+    </title>
     <meta
       name="description"
-      content="Web site created using create-react-app"
+      content="Welcome to xkmato — a space where I think out loud, explore the nature of our reality, share hard-earned knowledge, and take creative swings within my reach."
     />
-    <link rel="apple-touch-icon" href="%PUBLIC_URL%/logo192.png" />
-    <!--
-      manifest.json provides metadata used when your web app is installed on a
-      user's mobile device or desktop. See https://developers.google.com/web/fundamentals/web-app-manifest/
-    -->
-    <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
-    <!--
-      Notice the use of %PUBLIC_URL% in the tags above.
-      It will be replaced with the URL of the `public` folder during the build.
-      Only files inside the `public` folder can be referenced from the HTML.
+    <meta
+      name="keywords"
+      content="philosophy, reality, knowledge, creativity, thoughts, exploration, personal blog"
+    />
+    <meta name="author" content="XKMato" />
+    <link rel="canonical" href="https://xkmato.com" />
 
-      Unlike "/favicon.ico" or "favicon.ico", "%PUBLIC_URL%/favicon.ico" will
-      work correctly both with client-side routing and a non-root public URL.
-      Learn how to configure a non-root public URL by running `npm run build`.
-    -->
-    <title>XKMato</title>
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://xkmato.com" />
+    <meta
+      property="og:title"
+      content="XKMato - Thinking Out Loud About Reality, Knowledge & Creativity"
+    />
+    <meta
+      property="og:description"
+      content="Welcome to xkmato — a space where I think out loud, explore the nature of our reality, share hard-earned knowledge, and take creative swings within my reach."
+    />
+    <meta property="og:image" content="%PUBLIC_URL%/og-image.jpg" />
+    <meta property="og:site_name" content="XKMato" />
+
+    <!-- Twitter -->
+    <meta property="twitter:card" content="summary_large_image" />
+    <meta property="twitter:url" content="https://xkmato.com" />
+    <meta
+      property="twitter:title"
+      content="XKMato - Thinking Out Loud About Reality, Knowledge & Creativity"
+    />
+    <meta
+      property="twitter:description"
+      content="Welcome to xkmato — a space where I think out loud, explore the nature of our reality, share hard-earned knowledge, and take creative swings within my reach."
+    />
+    <meta property="twitter:image" content="%PUBLIC_URL%/og-image.jpg" />
+
+    <!-- Additional SEO -->
+    <meta name="robots" content="index, follow" />
+    <meta name="language" content="English" />
+    <meta name="revisit-after" content="7 days" />
+
+    <link rel="apple-touch-icon" href="%PUBLIC_URL%/logo192.png" />
+    <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
+
+    <!-- Structured Data -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "Blog",
+        "name": "XKMato",
+        "description": "A space where I think out loud, explore the nature of our reality, share hard-earned knowledge, and take creative swings within my reach.",
+        "url": "https://xkmato.com",
+        "author": {
+          "@type": "Person",
+          "name": "XKMato"
+        }
+      }
+    </script>
   </head>
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>
     <div id="root"></div>
-    <!--
-      This HTML file is a template.
-      If you open it directly in the browser, you will see an empty page.
-
-      You can add webfonts, meta tags, or analytics to this file.
-      The build step will place the bundled scripts into the <body> tag.
-
-      To begin the development, run `npm start` or `yarn start`.
-      To create a production bundle, use `npm run build` or `yarn build`.
-    -->
   </body>
 </html>
