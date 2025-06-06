@@ -114,7 +114,7 @@ const PostList = ({ onSelectPost, navigate }) => {
   if (error)
     return <div className="text-center text-red-500 mt-8">Error: {error}</div>;
 
-  // Get unique tags from all posts (first 5)
+  // Get unique tags from all posts (first 5, prioritizing "book" category)
   const getTopTags = () => {
     const tagCounts = {};
 
@@ -127,18 +127,39 @@ const PostList = ({ onSelectPost, navigate }) => {
       }
     });
 
-    // Sort by count and take first 5
-    return Object.entries(tagCounts)
-      .sort(([, a], [, b]) => b - a)
-      .slice(0, 5)
-      .map(([tagKey]) => {
-        const [categoryName, tagName] = tagKey.split(":");
-        return {
-          categoryName,
-          name: tagName,
-          displayName: `${tagName} (${categoryName})`,
-        };
-      });
+    // Separate book tags from other tags
+    const bookTags = [];
+    const otherTags = [];
+
+    Object.entries(tagCounts).forEach(([tagKey, count]) => {
+      const [categoryName, tagName] = tagKey.split(":");
+      const tagData = {
+        categoryName,
+        name: tagName,
+        displayName: `${tagName} (${categoryName})`,
+        count,
+      };
+
+      if (categoryName === "book") {
+        bookTags.push(tagData);
+      } else {
+        otherTags.push(tagData);
+      }
+    });
+
+    // Sort both arrays by count (descending)
+    bookTags.sort((a, b) => b.count - a.count);
+    otherTags.sort((a, b) => b.count - a.count);
+
+    // Take up to 5 book tags first, then fill remaining slots with other tags
+    const result = [...bookTags.slice(0, 5)];
+    const remainingSlots = 5 - result.length;
+
+    if (remainingSlots > 0) {
+      result.push(...otherTags.slice(0, remainingSlots));
+    }
+
+    return result;
   };
 
   const topTags = getTopTags();
