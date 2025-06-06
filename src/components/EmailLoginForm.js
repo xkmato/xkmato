@@ -11,7 +11,7 @@ const EmailLoginForm = () => {
   const { auth } = useContext(FirebaseContext); // Get auth from context
 
   const actionCodeSettings = {
-    url: "http://localhost:3000/login-callback", // Replace with YOUR_BLOG_LIVE_URL/login-callback
+    url: "https://xkmato.com/login-callback", // Replace with YOUR_BLOG_LIVE_URL/login-callback
     handleCodeInApp: true,
   };
 
