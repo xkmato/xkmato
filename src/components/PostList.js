@@ -72,7 +72,7 @@ const PostList = ({ onSelectPost, navigate }) => {
     }
   };
 
-  // Load more posts function
+  // Load more posts function - updated to handle tab filtering
   const loadMorePosts = async () => {
     if (!db || !hasMore || loadingMore) return;
 
@@ -82,42 +82,104 @@ const PostList = ({ onSelectPost, navigate }) => {
       const postsCollectionPath = `artifacts/${appId}/users/${process.env.REACT_APP_ADMIN_USER_UID}/posts`;
       const postsCollectionRef = collection(db, postsCollectionPath);
 
-      let q = query(
-        postsCollectionRef,
-        orderBy("createdAt", "desc"),
-        limit(POSTS_PER_PAGE)
-      );
-
-      if (lastDoc) {
-        q = query(
+      // For "Latest" tab, use normal pagination
+      if (activeTab === "Latest") {
+        let q = query(
           postsCollectionRef,
           orderBy("createdAt", "desc"),
-          startAfter(lastDoc),
           limit(POSTS_PER_PAGE)
         );
-      }
 
-      const snapshot = await getDocs(q);
-
-      if (snapshot.empty || snapshot.docs.length < POSTS_PER_PAGE) {
-        setHasMore(false);
-      }
-
-      const newPosts = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
-
-      // Filter out draft posts unless user is the author
-      const filteredNewPosts = newPosts.filter((post) => {
-        if (user?.uid === process.env.REACT_APP_ADMIN_USER_UID) {
-          return true;
+        if (lastDoc) {
+          q = query(
+            postsCollectionRef,
+            orderBy("createdAt", "desc"),
+            startAfter(lastDoc),
+            limit(POSTS_PER_PAGE)
+          );
         }
-        return !post.isDraft;
-      });
 
-      setPosts((prevPosts) => [...prevPosts, ...filteredNewPosts]);
-      setLastDoc(snapshot.docs[snapshot.docs.length - 1]);
+        const snapshot = await getDocs(q);
+
+        if (snapshot.empty || snapshot.docs.length < POSTS_PER_PAGE) {
+          setHasMore(false);
+        }
+
+        const newPosts = snapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }));
+
+        const filteredNewPosts = newPosts.filter((post) => {
+          if (user?.uid === process.env.REACT_APP_ADMIN_USER_UID) {
+            return true;
+          }
+          return !post.isDraft;
+        });
+
+        setPosts((prevPosts) => [...prevPosts, ...filteredNewPosts]);
+        setLastDoc(snapshot.docs[snapshot.docs.length - 1]);
+      } else {
+        // For other tabs, use allPosts and implement client-side pagination
+        const currentPostCount = posts.length;
+        const nextBatchSize = POSTS_PER_PAGE;
+
+        let filteredAllPosts;
+
+        if (activeTab === "Top") {
+          filteredAllPosts = [...allPosts].sort(
+            (a, b) => (b.views || 0) - (a.views || 0)
+          );
+        } else if (activeTab === "Others") {
+          const topTags = getTopTags();
+          filteredAllPosts = allPosts.filter((post) => {
+            if (!post.tags || !Array.isArray(post.tags)) return true;
+
+            const postTagKeys = post.tags.map(
+              (tag) => `${tag.categoryName}:${tag.name}`
+            );
+            const topTagKeys = topTags.map(
+              (tag) => `${tag.categoryName}:${tag.name}`
+            );
+
+            return !postTagKeys.some((key) => topTagKeys.includes(key));
+          });
+        } else {
+          // Specific tag filter
+          const topTags = getTopTags();
+          const selectedTag = topTags.find(
+            (tag) => tag.displayName === activeTab
+          );
+          if (!selectedTag) {
+            setHasMore(false);
+            setLoadingMore(false);
+            return;
+          }
+
+          filteredAllPosts = allPosts.filter((post) => {
+            if (!post.tags || !Array.isArray(post.tags)) return false;
+            return post.tags.some(
+              (tag) =>
+                tag.categoryName === selectedTag.categoryName &&
+                tag.name === selectedTag.name
+            );
+          });
+        }
+
+        // Get the next batch of posts
+        const nextBatch = filteredAllPosts.slice(
+          currentPostCount,
+          currentPostCount + nextBatchSize
+        );
+
+        if (nextBatch.length === 0 || nextBatch.length < nextBatchSize) {
+          setHasMore(false);
+        }
+
+        if (nextBatch.length > 0) {
+          setPosts((prevPosts) => [...prevPosts, ...nextBatch]);
+        }
+      }
     } catch (err) {
       console.error("Error loading more posts:", err);
       setError("Failed to load more posts.");
@@ -216,25 +278,70 @@ const PostList = ({ onSelectPost, navigate }) => {
     return () => unsubscribeAll();
   }, [db, isAuthReady, user]);
 
-  // Reset pagination when tab changes
+  // Reset pagination when tab changes - updated to handle initial load properly
   useEffect(() => {
     setPosts([]);
     setLastDoc(null);
     setHasMore(true);
     setLoading(true);
 
-    // Reload first batch for new tab
-    if (db && isAuthReady) {
+    // For "Latest" tab, reload from database
+    if (activeTab === "Latest" && db && isAuthReady) {
       loadMorePosts();
     }
-  }, [activeTab]);
+    // For other tabs, use allPosts for initial load
+    else if (activeTab !== "Latest" && allPosts.length > 0) {
+      const initialBatchSize = POSTS_PER_PAGE;
+      let filteredPosts;
 
-  if (loading)
-    return (
-      <div className="text-center text-gray-600 mt-8">Loading posts...</div>
-    );
-  if (error)
-    return <div className="text-center text-red-500 mt-8">Error: {error}</div>;
+      if (activeTab === "Top") {
+        filteredPosts = [...allPosts].sort(
+          (a, b) => (b.views || 0) - (a.views || 0)
+        );
+      } else if (activeTab === "Others") {
+        const topTags = getTopTags();
+        filteredPosts = allPosts.filter((post) => {
+          if (!post.tags || !Array.isArray(post.tags)) return true;
+
+          const postTagKeys = post.tags.map(
+            (tag) => `${tag.categoryName}:${tag.name}`
+          );
+          const topTagKeys = topTags.map(
+            (tag) => `${tag.categoryName}:${tag.name}`
+          );
+
+          return !postTagKeys.some((key) => topTagKeys.includes(key));
+        });
+      } else {
+        // Specific tag filter
+        const topTags = getTopTags();
+        const selectedTag = topTags.find(
+          (tag) => tag.displayName === activeTab
+        );
+        if (selectedTag) {
+          filteredPosts = allPosts.filter((post) => {
+            if (!post.tags || !Array.isArray(post.tags)) return false;
+            return post.tags.some(
+              (tag) =>
+                tag.categoryName === selectedTag.categoryName &&
+                tag.name === selectedTag.name
+            );
+          });
+        } else {
+          filteredPosts = [];
+        }
+      }
+
+      const initialBatch = filteredPosts.slice(0, initialBatchSize);
+      setPosts(initialBatch);
+
+      if (filteredPosts.length <= initialBatchSize) {
+        setHasMore(false);
+      }
+
+      setLoading(false);
+    }
+  }, [activeTab, allPosts, db, isAuthReady]);
 
   // Get unique tags from all posts (use allPosts for complete tag list)
   const getTopTags = () => {
@@ -289,36 +396,7 @@ const PostList = ({ onSelectPost, navigate }) => {
 
   // Filter posts based on active tab
   const getFilteredPosts = () => {
-    if (activeTab === "Latest") {
-      return posts;
-    } else if (activeTab === "Top") {
-      return [...posts].sort((a, b) => (b.views || 0) - (a.views || 0));
-    } else if (activeTab === "Others") {
-      return posts.filter((post) => {
-        if (!post.tags || !Array.isArray(post.tags)) return true;
-
-        const postTagKeys = post.tags.map(
-          (tag) => `${tag.categoryName}:${tag.name}`
-        );
-        const topTagKeys = topTags.map(
-          (tag) => `${tag.categoryName}:${tag.name}`
-        );
-
-        return !postTagKeys.some((key) => topTagKeys.includes(key));
-      });
-    } else {
-      const selectedTag = topTags.find((tag) => tag.displayName === activeTab);
-      if (!selectedTag) return posts;
-
-      return posts.filter((post) => {
-        if (!post.tags || !Array.isArray(post.tags)) return false;
-        return post.tags.some(
-          (tag) =>
-            tag.categoryName === selectedTag.categoryName &&
-            tag.name === selectedTag.name
-        );
-      });
-    }
+    return posts;
   };
 
   const filteredPosts = getFilteredPosts();
