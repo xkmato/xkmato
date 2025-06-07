@@ -29,7 +29,8 @@ const AdminPanel = () => {
   const [selectedPost, setSelectedPost] = useState(null);
   const [formTitle, setFormTitle] = useState("");
   const [formContent, setFormContent] = useState("");
-  const [formTags, setFormTags] = useState([]); // Array of tag objects
+  const [formTags, setFormTags] = useState([]);
+  const [formIsDraft, setFormIsDraft] = useState(false); // Add draft state
   const [availableCategories, setAvailableCategories] = useState([]);
   const [availableTags, setAvailableTags] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState("");
@@ -127,6 +128,7 @@ const AdminPanel = () => {
     setFormTitle("");
     setFormContent("");
     setFormTags([]);
+    setFormIsDraft(false); // Reset draft state
     setSelectedCategory("");
     setSelectedTag("");
     setNewCategoryName("");
@@ -327,7 +329,7 @@ const AdminPanel = () => {
     }
 
     const contentByteLength = new TextEncoder().encode(formContent).length;
-    const MAX_FIRESTORE_FIELD_BYTES = 1048487; // Approx 1MB
+    const MAX_FIRESTORE_FIELD_BYTES = 1048487;
 
     if (contentByteLength > MAX_FIRESTORE_FIELD_BYTES) {
       const currentSizeKB = Math.round(contentByteLength / 1024);
@@ -345,7 +347,8 @@ const AdminPanel = () => {
       const postData = {
         title: formTitle,
         content: formContent,
-        tags: formTags, // Include tags array
+        tags: formTags,
+        isDraft: formIsDraft, // Include draft status
         updatedAt: new Date(),
         userId,
       };
@@ -357,7 +360,9 @@ const AdminPanel = () => {
           selectedPost.id
         );
         await updateDoc(postRef, postData);
-        setMessage("Post updated successfully!");
+        setMessage(
+          `Post ${formIsDraft ? "saved as draft" : "published"} successfully!`
+        );
       } else {
         await addDoc(
           collection(db, `artifacts/${appId}/users/${userId}/posts`),
@@ -366,8 +371,9 @@ const AdminPanel = () => {
             createdAt: new Date(),
           }
         );
-
-        setMessage("Post created successfully!");
+        setMessage(
+          `Post ${formIsDraft ? "saved as draft" : "created"} successfully!`
+        );
       }
       resetForm();
     } catch (error) {
@@ -381,8 +387,37 @@ const AdminPanel = () => {
     setSelectedPost(post);
     setFormTitle(post.title);
     setFormContent(post.content);
-    setFormTags(post.tags || []); // Load existing tags
+    setFormTags(post.tags || []);
+    setFormIsDraft(post.isDraft || false); // Load draft status
     setMessage("");
+  };
+
+  // Quick publish/unpublish function
+  const togglePostStatus = async (post) => {
+    if (!db || !user || !userId) {
+      setMessage("Authentication required to change post status.");
+      return;
+    }
+
+    try {
+      const postRef = doc(
+        db,
+        `artifacts/${appId}/users/${userId}/posts`,
+        post.id
+      );
+      const newDraftStatus = !post.isDraft;
+
+      await updateDoc(postRef, {
+        isDraft: newDraftStatus,
+        updatedAt: new Date(),
+      });
+
+      setMessage(
+        `Post ${newDraftStatus ? "moved to draft" : "published"} successfully!`
+      );
+    } catch (error) {
+      setMessage(`Error changing post status: ${error.message}`);
+    }
   };
 
   const handleDeleteClick = (post) => {
@@ -466,8 +501,6 @@ const AdminPanel = () => {
 
   return (
     <div className="container mx-auto p-6 mt-8">
-      <h2 className="text-3xl font-bold text-gray-800 mb-6">Admin Panel</h2>
-
       {message && (
         <div
           className="bg-blue-100 border border-blue-400 text-blue-700 px-4 py-3 rounded-lg relative mb-4"
@@ -511,6 +544,35 @@ const AdminPanel = () => {
               className="border border-gray-300 rounded-lg w-full py-2 px-3 text-gray-800 leading-tight focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent"
               required
             />
+          </div>
+
+          {/* Draft Status Toggle */}
+          <div className="flex items-center space-x-3">
+            <label className="flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                checked={formIsDraft}
+                onChange={(e) => setFormIsDraft(e.target.checked)}
+                className="sr-only"
+              />
+              <div
+                className={`relative inline-flex items-center h-6 rounded-full w-11 transition-colors focus:outline-none ${
+                  formIsDraft ? "bg-gray-600" : "bg-green-600"
+                }`}
+              >
+                <span
+                  className={`inline-block w-4 h-4 transform bg-white rounded-full transition-transform ${
+                    formIsDraft ? "translate-x-1" : "translate-x-6"
+                  }`}
+                />
+              </div>
+              <span className="ml-3 text-sm font-medium text-gray-700">
+                {formIsDraft ? "Draft" : "Published"}
+              </span>
+            </label>
+            <span className="text-xs text-gray-500">
+              {formIsDraft ? "Only visible to you" : "Visible to everyone"}
+            </span>
           </div>
 
           {/* Tags Section */}
@@ -707,7 +769,13 @@ const AdminPanel = () => {
               }`}
               disabled={imageUploading || (loading && !posts.length === 0)}
             >
-              {selectedPost ? "Update Post" : "Create Post"}
+              {selectedPost
+                ? formIsDraft
+                  ? "Save Draft"
+                  : "Update & Publish"
+                : formIsDraft
+                ? "Save as Draft"
+                : "Create & Publish"}
             </button>
             {selectedPost && (
               <button
@@ -737,9 +805,16 @@ const AdminPanel = () => {
                 className="py-4 flex items-center justify-between"
               >
                 <div className="flex-1">
-                  <h4 className="text-lg font-medium text-gray-900">
-                    {post.title || "Untitled Post"}
-                  </h4>
+                  <div className="flex items-center gap-2 mb-1">
+                    <h4 className="text-lg font-medium text-gray-900">
+                      {post.title || "Untitled Post"}
+                    </h4>
+                    {post.isDraft && (
+                      <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                        Draft
+                      </span>
+                    )}
+                  </div>
                   <p
                     className="text-sm text-gray-500 line-clamp-1 mb-2"
                     dangerouslySetInnerHTML={{ __html: post.content }}
@@ -762,6 +837,16 @@ const AdminPanel = () => {
                   )}
                 </div>
                 <div className="flex space-x-3 ml-4">
+                  <button
+                    onClick={() => togglePostStatus(post)}
+                    className={`${
+                      post.isDraft
+                        ? "bg-green-500 hover:bg-green-600"
+                        : "bg-yellow-500 hover:bg-yellow-600"
+                    } text-white px-4 py-2 rounded-lg text-sm font-medium transition duration-300 ease-in-out shadow-sm`}
+                  >
+                    {post.isDraft ? "Publish" : "Draft"}
+                  </button>
                   <button
                     onClick={() => handleEdit(post)}
                     className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition duration-300 ease-in-out shadow-sm"

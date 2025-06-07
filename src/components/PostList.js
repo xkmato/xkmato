@@ -4,7 +4,15 @@ import {
   sendSignInLinkToEmail,
   signInWithPopup,
 } from "firebase/auth";
-import { collection, onSnapshot, query } from "firebase/firestore";
+import {
+  collection,
+  getDocs,
+  limit,
+  onSnapshot,
+  orderBy,
+  query,
+  startAfter,
+} from "firebase/firestore";
 import { useContext, useEffect, useRef, useState } from "react";
 import { FirebaseContext } from "../App";
 
@@ -25,9 +33,15 @@ const PostList = ({ onSelectPost, navigate }) => {
   const { db, isAuthReady, user, app } = useContext(FirebaseContext);
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState(null);
   const [activeTab, setActiveTab] = useState("Latest");
+  const [lastDoc, setLastDoc] = useState(null);
+  const [hasMore, setHasMore] = useState(true);
+  const [allPosts, setAllPosts] = useState([]); // Store all posts for real-time updates
   const emailRef = useRef();
+
+  const POSTS_PER_PAGE = 15;
 
   // Google Sign-In handler
   const handleGoogleSignIn = async () => {
@@ -58,6 +72,61 @@ const PostList = ({ onSelectPost, navigate }) => {
     }
   };
 
+  // Load more posts function
+  const loadMorePosts = async () => {
+    if (!db || !hasMore || loadingMore) return;
+
+    setLoadingMore(true);
+    try {
+      const appId = process.env.REACT_APP_FIREBASE_APP_ID;
+      const postsCollectionPath = `artifacts/${appId}/users/${process.env.REACT_APP_ADMIN_USER_UID}/posts`;
+      const postsCollectionRef = collection(db, postsCollectionPath);
+
+      let q = query(
+        postsCollectionRef,
+        orderBy("createdAt", "desc"),
+        limit(POSTS_PER_PAGE)
+      );
+
+      if (lastDoc) {
+        q = query(
+          postsCollectionRef,
+          orderBy("createdAt", "desc"),
+          startAfter(lastDoc),
+          limit(POSTS_PER_PAGE)
+        );
+      }
+
+      const snapshot = await getDocs(q);
+
+      if (snapshot.empty || snapshot.docs.length < POSTS_PER_PAGE) {
+        setHasMore(false);
+      }
+
+      const newPosts = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+
+      // Filter out draft posts unless user is the author
+      const filteredNewPosts = newPosts.filter((post) => {
+        if (user?.uid === process.env.REACT_APP_ADMIN_USER_UID) {
+          return true;
+        }
+        return !post.isDraft;
+      });
+
+      setPosts((prevPosts) => [...prevPosts, ...filteredNewPosts]);
+      setLastDoc(snapshot.docs[snapshot.docs.length - 1]);
+    } catch (err) {
+      console.error("Error loading more posts:", err);
+      setError("Failed to load more posts.");
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+
+  // Initial load and real-time updates for new posts
   useEffect(() => {
     if (!db || !isAuthReady) {
       if (isAuthReady && !db) {
@@ -73,39 +142,92 @@ const PostList = ({ onSelectPost, navigate }) => {
       setLoading(false);
       return;
     }
+
     const postsCollectionPath = `artifacts/${appId}/users/${process.env.REACT_APP_ADMIN_USER_UID}/posts`;
     const postsCollectionRef = collection(db, postsCollectionPath);
-    const q = query(postsCollectionRef);
 
-    const unsubscribe = onSnapshot(
-      q,
-      (snapshot) => {
+    // Initial load - get first batch of posts
+    const initialQuery = query(
+      postsCollectionRef,
+      orderBy("createdAt", "desc"),
+      limit(POSTS_PER_PAGE)
+    );
+
+    // Set up real-time listener for all posts (for new posts detection)
+    const allPostsQuery = query(postsCollectionRef);
+    const unsubscribeAll = onSnapshot(allPostsQuery, (snapshot) => {
+      const allPostsData = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+
+      const filteredAllPosts = allPostsData.filter((post) => {
+        if (user?.uid === process.env.REACT_APP_ADMIN_USER_UID) {
+          return true;
+        }
+        return !post.isDraft;
+      });
+
+      filteredAllPosts.sort(
+        (a, b) =>
+          (b.createdAt?.toDate?.() || 0) - (a.createdAt?.toDate?.() || 0)
+      );
+
+      setAllPosts(filteredAllPosts);
+    });
+
+    // Initial load
+    getDocs(initialQuery)
+      .then((snapshot) => {
         try {
+          if (snapshot.empty) {
+            setHasMore(false);
+          } else if (snapshot.docs.length < POSTS_PER_PAGE) {
+            setHasMore(false);
+          }
+
           const postsData = snapshot.docs.map((doc) => ({
             id: doc.id,
             ...doc.data(),
           }));
-          postsData.sort(
-            (a, b) =>
-              (b.createdAt?.toDate?.() || 0) - (a.createdAt?.toDate?.() || 0)
-          );
-          setPosts(postsData);
+
+          const filteredPosts = postsData.filter((post) => {
+            if (user?.uid === process.env.REACT_APP_ADMIN_USER_UID) {
+              return true;
+            }
+            return !post.isDraft;
+          });
+
+          setPosts(filteredPosts);
+          setLastDoc(snapshot.docs[snapshot.docs.length - 1]);
           setLoading(false);
         } catch (err) {
-          console.error("Error processing posts snapshot:", err);
+          console.error("Error processing initial posts:", err);
           setError("Failed to load posts.");
           setLoading(false);
         }
-      },
-      (err) => {
-        console.error("onSnapshot error:", err);
-        setError("Real-time updates failed.");
+      })
+      .catch((err) => {
+        console.error("Error loading initial posts:", err);
+        setError("Failed to load posts.");
         setLoading(false);
-      }
-    );
+      });
 
-    return () => unsubscribe();
-  }, [db, isAuthReady]);
+    return () => unsubscribeAll();
+  }, [db, isAuthReady, user]);
+
+  // Reset pagination when tab changes
+  useEffect(() => {
+    setPosts([]);
+    setLastDoc(null);
+    setHasMore(true);
+    setLoading(true);
+
+    // Reload first batch for new tab
+    if (db && isAuthReady) {
+      loadMorePosts();
+    }
+  }, [activeTab]);
 
   if (loading)
     return (
@@ -114,11 +236,15 @@ const PostList = ({ onSelectPost, navigate }) => {
   if (error)
     return <div className="text-center text-red-500 mt-8">Error: {error}</div>;
 
-  // Get unique tags from all posts (first 5, prioritizing "book" category)
+  // Get unique tags from all posts (use allPosts for complete tag list)
   const getTopTags = () => {
     const tagCounts = {};
 
-    posts.forEach((post) => {
+    allPosts.forEach((post) => {
+      if (user?.uid !== process.env.REACT_APP_ADMIN_USER_UID && post.isDraft) {
+        return;
+      }
+
       if (post.tags && Array.isArray(post.tags)) {
         post.tags.forEach((tag) => {
           const key = `${tag.categoryName}:${tag.name}`;
@@ -127,7 +253,6 @@ const PostList = ({ onSelectPost, navigate }) => {
       }
     });
 
-    // Separate book tags from other tags
     const bookTags = [];
     const otherTags = [];
 
@@ -147,11 +272,9 @@ const PostList = ({ onSelectPost, navigate }) => {
       }
     });
 
-    // Sort both arrays by count (descending)
     bookTags.sort((a, b) => b.count - a.count);
     otherTags.sort((a, b) => b.count - a.count);
 
-    // Take up to 5 book tags first, then fill remaining slots with other tags
     const result = [...bookTags.slice(0, 5)];
     const remainingSlots = 5 - result.length;
 
@@ -169,11 +292,8 @@ const PostList = ({ onSelectPost, navigate }) => {
     if (activeTab === "Latest") {
       return posts;
     } else if (activeTab === "Top") {
-      // You can implement your own "Top" logic here
-      // For now, just return posts sorted by some criteria
       return [...posts].sort((a, b) => (b.views || 0) - (a.views || 0));
     } else if (activeTab === "Others") {
-      // Show posts that don't have any of the top 5 tags
       return posts.filter((post) => {
         if (!post.tags || !Array.isArray(post.tags)) return true;
 
@@ -187,7 +307,6 @@ const PostList = ({ onSelectPost, navigate }) => {
         return !postTagKeys.some((key) => topTagKeys.includes(key));
       });
     } else {
-      // Filter by selected tag
       const selectedTag = topTags.find((tag) => tag.displayName === activeTab);
       if (!selectedTag) return posts;
 
@@ -208,7 +327,6 @@ const PostList = ({ onSelectPost, navigate }) => {
 
   const getExcerpt = (content, length = 70) => {
     if (!content) return "";
-    // Assuming content might be HTML, strip it for a plain text excerpt
     const text = stripHtml(content);
     return text.length > length ? text.substring(0, length) + "..." : text;
   };
@@ -221,7 +339,6 @@ const PostList = ({ onSelectPost, navigate }) => {
   };
 
   if (posts.length === 0 && !loading)
-    // Moved this check after loading/error
     return (
       <div className="text-center text-gray-600 mt-8">
         No posts yet. Start writing in the Admin panel!
@@ -238,9 +355,17 @@ const PostList = ({ onSelectPost, navigate }) => {
             className="bg-transparent p-0 cursor-pointer group"
             onClick={() => onSelectPost(featuredPost)}
           >
-            <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-2 group-hover:text-blue-600 transition-colors">
-              {featuredPost.title}
-            </h1>
+            <div className="flex items-center gap-2 mb-2">
+              <h1 className="text-3xl md:text-4xl font-bold text-gray-900 group-hover:text-blue-600 transition-colors">
+                {featuredPost.title}
+              </h1>
+              {featuredPost.isDraft &&
+                user?.uid === process.env.REACT_APP_ADMIN_USER_UID && (
+                  <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-yellow-100 text-yellow-800">
+                    Draft
+                  </span>
+                )}
+            </div>
             <p className="text-gray-700 text-base md:text-lg mb-3">
               {featuredPost.subtitle || "We see what we believe."}
             </p>
@@ -254,7 +379,6 @@ const PostList = ({ onSelectPost, navigate }) => {
 
         {/* Tab Navigation */}
         <div className="flex items-center border-b border-gray-300 pb-2 overflow-x-auto">
-          {/* Latest Tab */}
           <button
             onClick={() => setActiveTab("Latest")}
             className={`py-2 px-3 text-sm font-medium whitespace-nowrap ${
@@ -266,7 +390,6 @@ const PostList = ({ onSelectPost, navigate }) => {
             Latest
           </button>
 
-          {/* Top Tab */}
           <button
             onClick={() => setActiveTab("Top")}
             className={`py-2 px-3 text-sm font-medium whitespace-nowrap ${
@@ -293,7 +416,6 @@ const PostList = ({ onSelectPost, navigate }) => {
             </button>
           ))}
 
-          {/* Others Tab */}
           <button
             onClick={() => setActiveTab("Others")}
             className={`py-2 px-3 text-sm font-medium whitespace-nowrap ${
@@ -315,9 +437,17 @@ const PostList = ({ onSelectPost, navigate }) => {
               onClick={() => onSelectPost(post)}
             >
               <div className="p-4 sm:p-5 flex-grow">
-                <h2 className="text-lg sm:text-xl font-semibold text-gray-800 mb-1 group-hover:text-blue-600 transition-colors">
-                  {post.title}
-                </h2>
+                <div className="flex items-center gap-2 mb-1">
+                  <h2 className="text-lg sm:text-xl font-semibold text-gray-800 group-hover:text-blue-600 transition-colors">
+                    {post.title}
+                  </h2>
+                  {post.isDraft &&
+                    user?.uid === process.env.REACT_APP_ADMIN_USER_UID && (
+                      <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                        Draft
+                      </span>
+                    )}
+                </div>
                 <p className="text-gray-600 text-sm mb-2 line-clamp-2">
                   {post.subtitle || getExcerpt(post.content)}
                 </p>
@@ -342,13 +472,27 @@ const PostList = ({ onSelectPost, navigate }) => {
               )}
             </div>
           ))}
-          {otherPosts.length === 0 && featuredPost && (
+
+          {/* Load More Button */}
+          {hasMore && filteredPosts.length >= POSTS_PER_PAGE && (
+            <div className="text-center py-6">
+              <button
+                onClick={loadMorePosts}
+                disabled={loadingMore}
+                className="bg-blue-500 hover:bg-blue-600 disabled:bg-blue-300 text-white font-medium py-3 px-6 rounded-lg transition duration-300 ease-in-out"
+              >
+                {loadingMore ? "Loading..." : "Load More Posts"}
+              </button>
+            </div>
+          )}
+
+          {otherPosts.length === 0 && featuredPost && !hasMore && (
             <div className="text-center text-gray-600 py-4">No more posts.</div>
           )}
         </div>
       </div>
 
-      {/* Sidebar Area */}
+      {/* Sidebar Area - keeping existing sidebar code */}
       <aside className="lg:w-1/3 space-y-6 lg:pt-0">
         <div className="p-5 sm:p-6 bg-white rounded-xl shadow-sm border border-gray-200">
           <div className="flex items-center mb-4">
