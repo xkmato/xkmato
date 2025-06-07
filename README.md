@@ -1,6 +1,6 @@
 # XKMato
 
-## xkmato.com
+[**xkmato.com**](https://xkmato.com)
 
 Welcome to xkmato — a space where I think out loud, explore the nature of our reality, share hard-earned knowledge, take creative swings within my reach, and build the world I want to live in.
 
