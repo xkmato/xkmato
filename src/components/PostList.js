@@ -423,6 +423,68 @@ const PostList = ({ onSelectPost, navigate }) => {
       </div>
     );
 
+  // Add loading state for initial load
+  if (loading && posts.length === 0) {
+    return (
+      <div className="flex flex-col lg:flex-row gap-x-8 gap-y-8">
+        <div className="lg:w-2/3 flex flex-col space-y-8">
+          {/* Featured Post Skeleton */}
+          <div className="animate-pulse">
+            <div className="h-8 bg-gray-200 rounded w-3/4 mb-3"></div>
+            <div className="h-6 bg-gray-200 rounded w-1/2 mb-2"></div>
+            <div className="h-4 bg-gray-200 rounded w-1/4"></div>
+          </div>
+
+          {/* Tab Navigation Skeleton */}
+          <div className="flex items-center border-b border-gray-300 pb-2 space-x-4">
+            {[...Array(5)].map((_, i) => (
+              <div
+                key={i}
+                className="h-6 bg-gray-200 rounded w-16 animate-pulse"
+              ></div>
+            ))}
+          </div>
+
+          {/* Post List Skeleton */}
+          <div className="space-y-6">
+            {[...Array(3)].map((_, i) => (
+              <div
+                key={i}
+                className="flex bg-white rounded-lg shadow-sm border border-gray-200 animate-pulse"
+              >
+                <div className="p-4 sm:p-5 flex-grow">
+                  <div className="h-6 bg-gray-200 rounded w-3/4 mb-2"></div>
+                  <div className="h-4 bg-gray-200 rounded w-full mb-1"></div>
+                  <div className="h-4 bg-gray-200 rounded w-2/3 mb-2"></div>
+                  <div className="h-3 bg-gray-200 rounded w-1/4"></div>
+                </div>
+                <div className="w-1/3 sm:w-32 md:w-40 lg:w-48 flex-shrink-0">
+                  <div className="w-full h-24 bg-gray-200"></div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Sidebar Skeleton */}
+        <aside className="lg:w-1/3 space-y-6 lg:pt-0">
+          <div className="p-5 sm:p-6 bg-white rounded-xl shadow-sm border border-gray-200 animate-pulse">
+            <div className="flex items-center mb-4">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg bg-gray-200 mr-3 sm:mr-4"></div>
+              <div className="h-6 bg-gray-200 rounded w-20"></div>
+            </div>
+            <div className="space-y-2 mb-4">
+              <div className="h-4 bg-gray-200 rounded w-full"></div>
+              <div className="h-4 bg-gray-200 rounded w-5/6"></div>
+              <div className="h-4 bg-gray-200 rounded w-4/5"></div>
+            </div>
+            <div className="h-10 bg-gray-200 rounded w-full"></div>
+          </div>
+        </aside>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col lg:flex-row gap-x-8 gap-y-8">
       {/* Main Content Area */}
@@ -551,14 +613,25 @@ const PostList = ({ onSelectPost, navigate }) => {
             </div>
           ))}
 
+          {/* Loading indicator for tab switching */}
+          {loading && posts.length === 0 && (
+            <div className="flex justify-center items-center py-12">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+              <span className="ml-3 text-gray-600">Loading posts...</span>
+            </div>
+          )}
+
           {/* Load More Button */}
           {hasMore && filteredPosts.length >= POSTS_PER_PAGE && (
             <div className="text-center py-6">
               <button
                 onClick={loadMorePosts}
                 disabled={loadingMore}
-                className="bg-blue-500 hover:bg-blue-600 disabled:bg-blue-300 text-white font-medium py-3 px-6 rounded-lg transition duration-300 ease-in-out"
+                className="bg-blue-500 hover:bg-blue-600 disabled:bg-blue-300 text-white font-medium py-3 px-6 rounded-lg transition duration-300 ease-in-out flex items-center justify-center mx-auto"
               >
+                {loadingMore && (
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                )}
                 {loadingMore ? "Loading..." : "Load More Posts"}
               </button>
             </div>

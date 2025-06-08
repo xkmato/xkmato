@@ -179,6 +179,27 @@ const PostDetail = ({ onBack }) => {
     setCommentText("");
   };
 
+  // Helper function to extract first image URL from HTML content
+  const extractFirstImageFromContent = (htmlContent) => {
+    if (!htmlContent) return null;
+
+    // Create a temporary div to parse HTML
+    const tempDiv = document.createElement("div");
+    tempDiv.innerHTML = htmlContent;
+
+    // Look for img tags
+    const imgTag = tempDiv.querySelector("img");
+    if (imgTag && imgTag.src) {
+      return imgTag.src;
+    }
+
+    // Look for image URLs in text (basic regex for common image extensions)
+    const imageUrlRegex = /(https?:\/\/[^\s]+\.(?:jpg|jpeg|png|gif|webp|svg))/i;
+    const match = htmlContent.match(imageUrlRegex);
+
+    return match ? match[1] : null;
+  };
+
   if (loading) return <div>Loading...</div>;
   if (error) return <div>{error}</div>;
   if (!post) return null;
@@ -193,13 +214,33 @@ const PostDetail = ({ onBack }) => {
         .toUpperCase()
     : "";
 
+  // Determine SEO image with fallback logic
+  const getSEOImage = () => {
+    // 1. Use featured image if available
+    if (post.imageUrl) {
+      return post.imageUrl;
+    }
+
+    // 2. Extract first image from content
+    const contentImage = extractFirstImageFromContent(post.content);
+    if (contentImage) {
+      return contentImage;
+    }
+
+    // 3. Fall back to org image from environment or default
+    return (
+      process.env.REACT_APP_DEFAULT_OG_IMAGE ||
+      "https://xkmato.com/og-image.png"
+    );
+  };
+
   return (
     <>
       {post && (
         <SEOHead
           title={post.title}
           description={post.content?.substring(0, 160) + "..."}
-          image={post.imageUrl}
+          image={getSEOImage()}
           url={`https://xkmato.com/post/${post.userId}/${post.id}`}
           type="article"
           publishedTime={

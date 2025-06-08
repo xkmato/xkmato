@@ -30,7 +30,8 @@ const AdminPanel = () => {
   const [formTitle, setFormTitle] = useState("");
   const [formContent, setFormContent] = useState("");
   const [formTags, setFormTags] = useState([]);
-  const [formIsDraft, setFormIsDraft] = useState(false); // Add draft state
+  const [formIsDraft, setFormIsDraft] = useState(false);
+  const [formImageUrl, setFormImageUrl] = useState(""); // Add image URL state
   const [availableCategories, setAvailableCategories] = useState([]);
   const [availableTags, setAvailableTags] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState("");
@@ -128,7 +129,8 @@ const AdminPanel = () => {
     setFormTitle("");
     setFormContent("");
     setFormTags([]);
-    setFormIsDraft(false); // Reset draft state
+    setFormIsDraft(false);
+    setFormImageUrl(""); // Reset image URL
     setSelectedCategory("");
     setSelectedTag("");
     setNewCategoryName("");
@@ -238,19 +240,14 @@ const AdminPanel = () => {
     return availableTags.filter((tag) => tag.categoryId === selectedCategory);
   };
 
-  // Custom Image Handler for ReactQuill
-  const imageHandler = () => {
+  // Independent image upload function
+  const handleImageUpload = () => {
     if (!storage) {
       setMessage("Firebase Storage is not initialized. Cannot upload image.");
-      // Potentially show a modal or a more persistent error
       return;
     }
     if (!userId) {
       setMessage("User not authenticated. Cannot upload image.");
-      return;
-    }
-    if (!quillRef.current) {
-      setMessage("Editor not ready. Please try again.");
       return;
     }
 
@@ -266,7 +263,6 @@ const AdminPanel = () => {
       }
 
       if (file.size > 5 * 1024 * 1024) {
-        // Example: 5MB limit for individual images
         setMessage("Image file is too large. Maximum 5MB allowed per image.");
         return;
       }
@@ -294,11 +290,8 @@ const AdminPanel = () => {
         () => {
           getDownloadURL(uploadTask.snapshot.ref)
             .then((downloadURL) => {
-              const editor = quillRef.current.getEditor();
-              const range = editor.getSelection(true); // Get current cursor position or default to end
-              editor.insertEmbed(range.index, "image", downloadURL);
-              editor.setSelection(range.index + 1); // Move cursor after the inserted image
-              setMessage("Image uploaded and inserted successfully!");
+              setFormImageUrl(downloadURL);
+              setMessage("Image uploaded successfully! URL copied to form.");
               setImageUploading(false);
             })
             .catch((error) => {
@@ -311,6 +304,30 @@ const AdminPanel = () => {
       );
     };
   };
+
+  // Remove the old imageHandler function and update quillModules
+  const quillModules = {
+    toolbar: {
+      container: [
+        [{ header: [1, 2, false] }],
+        ["bold", "italic", "underline", "strike", "blockquote"],
+        [{ list: "ordered" }, { list: "bullet" }],
+        ["link"],
+        ["clean"],
+      ],
+    },
+  };
+
+  const quillFormats = [
+    "header",
+    "bold",
+    "italic",
+    "underline",
+    "strike",
+    "blockquote",
+    "list",
+    "link",
+  ];
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -348,7 +365,8 @@ const AdminPanel = () => {
         title: formTitle,
         content: formContent,
         tags: formTags,
-        isDraft: formIsDraft, // Include draft status
+        isDraft: formIsDraft,
+        imageUrl: formImageUrl || null, // Include image URL
         updatedAt: new Date(),
         userId,
       };
@@ -388,7 +406,8 @@ const AdminPanel = () => {
     setFormTitle(post.title);
     setFormContent(post.content);
     setFormTags(post.tags || []);
-    setFormIsDraft(post.isDraft || false); // Load draft status
+    setFormIsDraft(post.isDraft || false);
+    setFormImageUrl(post.imageUrl || ""); // Load image URL
     setMessage("");
   };
 
@@ -471,34 +490,6 @@ const AdminPanel = () => {
       </div>
     );
 
-  // Define modules and formats for ReactQuill
-  const quillModules = {
-    toolbar: {
-      container: [
-        [{ header: [1, 2, false] }],
-        ["bold", "italic", "underline", "strike", "blockquote"],
-        [{ list: "ordered" }, { list: "bullet" }],
-        ["link", "image"], // 'image' will now use our custom handler
-        ["clean"],
-      ],
-      handlers: {
-        image: imageHandler, // Register the custom image handler
-      },
-    },
-  };
-
-  const quillFormats = [
-    "header",
-    "bold",
-    "italic",
-    "underline",
-    "strike",
-    "blockquote",
-    "list",
-    "link",
-    "image", // Ensure 'image' format is allowed
-  ];
-
   return (
     <div className="container mx-auto p-6 mt-8">
       {message && (
@@ -544,6 +535,56 @@ const AdminPanel = () => {
               className="border border-gray-300 rounded-lg w-full py-2 px-3 text-gray-800 leading-tight focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent"
               required
             />
+          </div>
+
+          {/* Image Upload Section */}
+          <div>
+            <label className="block text-gray-700 text-sm font-bold mb-2">
+              Featured Image:
+            </label>
+            <div className="space-y-3">
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={handleImageUpload}
+                  disabled={imageUploading}
+                  className={`bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition duration-300 ease-in-out shadow-sm ${
+                    imageUploading ? "opacity-50 cursor-not-allowed" : ""
+                  }`}
+                >
+                  {imageUploading ? "Uploading..." : "Upload Image"}
+                </button>
+                {formImageUrl && (
+                  <button
+                    type="button"
+                    onClick={() => setFormImageUrl("")}
+                    className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition duration-300 ease-in-out shadow-sm"
+                  >
+                    Remove Image
+                  </button>
+                )}
+              </div>
+
+              <input
+                type="url"
+                value={formImageUrl}
+                onChange={(e) => setFormImageUrl(e.target.value)}
+                placeholder="Or paste image URL here..."
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
+              />
+
+              {formImageUrl && (
+                <div className="border border-gray-200 rounded-lg p-3 bg-gray-50">
+                  <p className="text-sm text-gray-600 mb-2">Image Preview:</p>
+                  <img
+                    src={formImageUrl}
+                    alt="Preview"
+                    className="max-w-full h-32 object-cover rounded border"
+                    onError={() => setMessage("Invalid image URL")}
+                  />
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Draft Status Toggle */}
@@ -638,8 +679,11 @@ const AdminPanel = () => {
                   className="w-full px-2 py-1 border rounded text-sm"
                 >
                   <option value="">Select Category</option>
-                  {availableCategories.map((category) => (
-                    <option key={category.id} value={category.id}>
+                  {availableCategories.map((category, index) => (
+                    <option
+                      key={`category-${category.id}-${index}`}
+                      value={category.id}
+                    >
                       {category.name}
                     </option>
                   ))}
@@ -697,8 +741,8 @@ const AdminPanel = () => {
                     className="flex-1 px-2 py-1 border rounded text-sm"
                   >
                     <option value="">Select Tag</option>
-                    {getFilteredTags().map((tag) => (
-                      <option key={tag.id} value={tag.id}>
+                    {getFilteredTags().map((tag, index) => (
+                      <option key={`tag-${tag.id}-${index}`} value={tag.id}>
                         {tag.name}
                       </option>
                     ))}
@@ -721,9 +765,9 @@ const AdminPanel = () => {
                   Selected Tags:
                 </h5>
                 <div className="flex flex-wrap gap-2">
-                  {formTags.map((tag) => (
+                  {formTags.map((tag, index) => (
                     <span
-                      key={tag.id}
+                      key={`selected-tag-${tag.id}-${index}`}
                       className="inline-flex items-center bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full"
                     >
                       <span className="text-gray-500 text-xs mr-1">
@@ -790,7 +834,7 @@ const AdminPanel = () => {
         </form>
       </div>
 
-      {/* Post List */}
+      {/* Post List - Update to show image */}
       <div className="bg-white rounded-xl shadow-lg p-6">
         <h3 className="text-2xl font-semibold text-gray-800 mb-4">
           Your Posts
@@ -799,43 +843,58 @@ const AdminPanel = () => {
           <p className="text-gray-600">You haven't created any posts yet.</p>
         ) : (
           <ul className="divide-y divide-gray-200">
-            {posts.map((post) => (
+            {posts.map((post, index) => (
               <li
-                key={post.id}
+                key={`post-${post.id}-${index}`}
                 className="py-4 flex items-center justify-between"
               >
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-1">
-                    <h4 className="text-lg font-medium text-gray-900">
-                      {post.title || "Untitled Post"}
-                    </h4>
-                    {post.isDraft && (
-                      <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-                        Draft
-                      </span>
+                <div className="flex-1 flex items-start gap-4">
+                  {/* Post Image Thumbnail */}
+                  {post.imageUrl && (
+                    <img
+                      src={post.imageUrl}
+                      alt={post.title}
+                      className="w-16 h-16 object-cover rounded-lg border border-gray-200 flex-shrink-0"
+                      onError={(e) => {
+                        e.target.style.display = "none";
+                      }}
+                    />
+                  )}
+
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <h4 className="text-lg font-medium text-gray-900 truncate">
+                        {post.title || "Untitled Post"}
+                      </h4>
+                      {post.isDraft && (
+                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                          Draft
+                        </span>
+                      )}
+                    </div>
+                    <p
+                      className="text-sm text-gray-500 line-clamp-1 mb-2"
+                      dangerouslySetInnerHTML={{ __html: post.content }}
+                    />
+                    {/* Display tags */}
+                    {post.tags && post.tags.length > 0 && (
+                      <div className="flex flex-wrap gap-1">
+                        {post.tags.map((tag, tagIndex) => (
+                          <span
+                            key={`post-tag-${post.id}-${tag.id}-${tagIndex}`}
+                            className="inline-flex items-center bg-gray-100 text-gray-700 text-xs px-2 py-1 rounded"
+                          >
+                            <span className="text-gray-400 mr-1">
+                              {tag.categoryName}:
+                            </span>
+                            {tag.name}
+                          </span>
+                        ))}
+                      </div>
                     )}
                   </div>
-                  <p
-                    className="text-sm text-gray-500 line-clamp-1 mb-2"
-                    dangerouslySetInnerHTML={{ __html: post.content }}
-                  />
-                  {/* Display tags */}
-                  {post.tags && post.tags.length > 0 && (
-                    <div className="flex flex-wrap gap-1">
-                      {post.tags.map((tag) => (
-                        <span
-                          key={tag.id}
-                          className="inline-flex items-center bg-gray-100 text-gray-700 text-xs px-2 py-1 rounded"
-                        >
-                          <span className="text-gray-400 mr-1">
-                            {tag.categoryName}:
-                          </span>
-                          {tag.name}
-                        </span>
-                      ))}
-                    </div>
-                  )}
                 </div>
+
                 <div className="flex space-x-3 ml-4">
                   <button
                     onClick={() => togglePostStatus(post)}
