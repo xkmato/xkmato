@@ -28,7 +28,7 @@ const stripHtml = (html) => {
   }
 };
 
-// Post List component
+// Post List component - add URLSearchParams handling
 const PostList = ({ onSelectPost, navigate }) => {
   const { db, isAuthReady, user, app } = useContext(FirebaseContext);
   const [posts, setPosts] = useState([]);
@@ -38,10 +38,87 @@ const PostList = ({ onSelectPost, navigate }) => {
   const [activeTab, setActiveTab] = useState("Latest");
   const [lastDoc, setLastDoc] = useState(null);
   const [hasMore, setHasMore] = useState(true);
-  const [allPosts, setAllPosts] = useState([]); // Store all posts for real-time updates
+  const [allPosts, setAllPosts] = useState([]);
   const emailRef = useRef();
 
   const POSTS_PER_PAGE = 15;
+
+  // Initialize activeTab from URL parameters
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const tagParam = urlParams.get("tag");
+    const categoryParam = urlParams.get("category");
+
+    if (tagParam && categoryParam) {
+      const displayName = `${tagParam} (${categoryParam})`;
+      setActiveTab(displayName);
+    } else if (urlParams.get("view") === "top") {
+      setActiveTab("Top");
+    } else if (urlParams.get("view") === "others") {
+      setActiveTab("Others");
+    }
+  }, []);
+
+  // Function to update URL without page reload
+  const updateURL = (tabName) => {
+    const url = new URL(window.location);
+
+    // Clear existing params
+    url.searchParams.delete("tag");
+    url.searchParams.delete("category");
+    url.searchParams.delete("view");
+
+    if (tabName === "Top") {
+      url.searchParams.set("view", "top");
+    } else if (tabName === "Others") {
+      url.searchParams.set("view", "others");
+    } else if (tabName !== "Latest") {
+      // Parse tag display name back to tag and category
+      const match = tabName.match(/^(.+) \((.+)\)$/);
+      if (match) {
+        const [, tagName, categoryName] = match;
+        url.searchParams.set("tag", tagName);
+        url.searchParams.set("category", categoryName);
+      }
+    }
+
+    window.history.pushState({}, "", url);
+  };
+
+  // Modified tab change handler
+  const handleTabChange = (tabName) => {
+    setActiveTab(tabName);
+    updateURL(tabName);
+  };
+
+  // Function to generate shareable URL for a tag
+  const getShareableTagURL = (tag) => {
+    const url = new URL(window.location.origin + window.location.pathname);
+    url.searchParams.set("tag", tag.name);
+    url.searchParams.set("category", tag.categoryName);
+    return url.toString();
+  };
+
+  // Function to copy tag URL to clipboard
+  const copyTagURL = async (tag, event) => {
+    event.stopPropagation(); // Prevent tab switch when clicking copy
+    const url = getShareableTagURL(tag);
+
+    try {
+      await navigator.clipboard.writeText(url);
+      // You could add a toast notification here
+      console.log("Tag URL copied to clipboard:", url);
+    } catch (err) {
+      console.error("Failed to copy URL:", err);
+      // Fallback for older browsers
+      const textArea = document.createElement("textarea");
+      textArea.value = url;
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand("copy");
+      document.body.removeChild(textArea);
+    }
+  };
 
   // Google Sign-In handler
   const handleGoogleSignIn = async () => {
@@ -517,10 +594,10 @@ const PostList = ({ onSelectPost, navigate }) => {
           </div>
         )}
 
-        {/* Tab Navigation */}
+        {/* Tab Navigation with shareable links */}
         <div className="flex items-center border-b border-gray-300 pb-2 overflow-x-auto">
           <button
-            onClick={() => setActiveTab("Latest")}
+            onClick={() => handleTabChange("Latest")}
             className={`py-2 px-3 text-sm font-medium whitespace-nowrap ${
               activeTab === "Latest"
                 ? "font-semibold text-gray-900 border-b-2 border-gray-900"
@@ -531,7 +608,7 @@ const PostList = ({ onSelectPost, navigate }) => {
           </button>
 
           <button
-            onClick={() => setActiveTab("Top")}
+            onClick={() => handleTabChange("Top")}
             className={`py-2 px-3 text-sm font-medium whitespace-nowrap ${
               activeTab === "Top"
                 ? "font-semibold text-gray-900 border-b-2 border-gray-900"
@@ -541,23 +618,44 @@ const PostList = ({ onSelectPost, navigate }) => {
             Top
           </button>
 
-          {/* Dynamic Top 5 Tags */}
+          {/* Dynamic Top 5 Tags with copy functionality */}
           {topTags.map((tag) => (
-            <button
-              key={tag.displayName}
-              onClick={() => setActiveTab(tag.displayName)}
-              className={`py-2 px-3 text-sm font-medium whitespace-nowrap ${
-                activeTab === tag.displayName
-                  ? "font-semibold text-gray-900 border-b-2 border-gray-900"
-                  : "text-gray-600 hover:text-gray-900"
-              }`}
-            >
-              {tag.displayName}
-            </button>
+            <div key={tag.displayName} className="relative group">
+              <button
+                onClick={() => handleTabChange(tag.displayName)}
+                className={`py-2 px-3 text-sm font-medium whitespace-nowrap ${
+                  activeTab === tag.displayName
+                    ? "font-semibold text-gray-900 border-b-2 border-gray-900"
+                    : "text-gray-600 hover:text-gray-900"
+                }`}
+              >
+                {tag.displayName}
+              </button>
+
+              {/* Copy link button - shows on hover */}
+              <button
+                onClick={(e) => copyTagURL(tag, e)}
+                className="absolute -top-1 -right-1 opacity-0 group-hover:opacity-100 transition-opacity bg-gray-700 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs hover:bg-gray-800"
+                title="Copy shareable link"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 16 16"
+                  fill="currentColor"
+                  className="w-3 h-3"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M8.914 6.025a1.875 1.875 0 0 1 2.061 2.061L8.5 10.56a1.875 1.875 0 0 1-2.652 0L4.061 8.773a1.875 1.875 0 0 1 0-2.652L6.44 3.746a1.875 1.875 0 0 1 2.061 2.061L7.293 7.015a.375.375 0 1 0 .53.53l1.208-1.208ZM3.22 9.22a.75.75 0 0 1 1.06 0l1.5 1.5a.75.75 0 0 1-1.06 1.06l-1.5-1.5a.75.75 0 0 1 0-1.06Zm9.56-6.56a.75.75 0 0 1 0 1.06l-1.5 1.5a.75.75 0 0 1-1.06-1.06l1.5-1.5a.75.75 0 0 1 1.06 0Z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+              </button>
+            </div>
           ))}
 
           <button
-            onClick={() => setActiveTab("Others")}
+            onClick={() => handleTabChange("Others")}
             className={`py-2 px-3 text-sm font-medium whitespace-nowrap ${
               activeTab === "Others"
                 ? "font-semibold text-gray-900 border-b-2 border-gray-900"
