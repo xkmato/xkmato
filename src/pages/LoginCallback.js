@@ -19,34 +19,41 @@ const LoginCallback = ({ navigate }) => {
         }
         if (!email) {
           setMessage("Email not provided. Sign-in failed.");
-          // Optionally, navigate to a login prompt page or show an error page
-          // if (navigate) setTimeout(() => navigate('login'), 3000);
           return;
         }
 
         try {
           await signInWithEmailLink(auth, email, window.location.href);
           localStorage.removeItem("emailForSignIn");
-          setMessage("Successfully signed in! Redirecting to home...");
+
+          // Get the stored redirect URL or default to home
+          const redirectUrl = localStorage.getItem("redirectAfterLogin");
+          localStorage.removeItem("redirectAfterLogin");
+
+          setMessage("Successfully signed in! Redirecting...");
           if (navigate) {
             // Clean up the URL by removing the sign-in link parameters
             window.history.replaceState({}, document.title, "/");
-            setTimeout(() => navigate("home"), 2000); // Redirect to home page
+            setTimeout(() => {
+              if (redirectUrl) {
+                // Redirect to the stored URL
+                window.location.href = redirectUrl;
+              } else {
+                // Fallback to home if no redirect URL is stored
+                navigate("home");
+              }
+            }, 2000);
           }
         } catch (error) {
           console.error("Error signing in with email link:", error);
           setMessage(`Sign-in failed: ${error.message}`);
-          // Optionally, navigate to a login error page
-          // if (navigate) setTimeout(() => navigate('login'), 3000);
         }
       } else {
         setMessage("Invalid sign-in link.");
-        // Optionally redirect if the link is not a sign-in link
-        // if (navigate) setTimeout(() => navigate('login'), 3000);
       }
     };
     handleSignIn();
-  }, [auth, navigate]); // Add navigate to dependency array
+  }, [auth, navigate]);
 
   return (
     <div>

@@ -26,6 +26,8 @@ const EmailLoginForm = () => {
     try {
       await sendSignInLinkToEmail(auth, emailToLogin, actionCodeSettings);
       localStorage.setItem("emailForSignIn", emailToLogin);
+      // Store the current page URL to redirect back after login
+      localStorage.setItem("redirectAfterLogin", window.location.href);
       setMessage(
         "A sign-in link has been sent to your email. Please check your inbox."
       );

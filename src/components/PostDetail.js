@@ -136,6 +136,8 @@ const PostDetail = ({ onBack }) => {
     const email = prompt("Enter your email for magic link:");
     if (!email) return;
     const auth = getAuth();
+    // Add this line before sending the email:
+    localStorage.setItem("redirectAfterLogin", window.location.href);
     await sendSignInLinkToEmail(auth, email, {
       url: window.location.href,
       handleCodeInApp: true,
@@ -460,9 +462,11 @@ const PostDetail = ({ onBack }) => {
                 } group-hover:text-red-500 transition`}
               />
             </button>
-            <span className="ml-2 text-gray-500 text-sm font-medium">
-              {likeCount}
-            </span>
+            {user?.uid === process.env.REACT_APP_ADMIN_USER_UID && (
+              <span className="ml-2 text-gray-500 text-sm font-medium">
+                {likeCount}
+              </span>
+            )}
             <button className="group flex items-center" aria-label="Comment">
               <ChatBubbleOvalLeftIcon className="w-6 h-6 text-gray-400 group-hover:text-blue-500 transition" />
             </button>
