@@ -40,7 +40,7 @@ const LoginCallback = ({ navigate }) => {
                 window.location.href = redirectUrl;
               } else {
                 // Fallback to home if no redirect URL is stored
-                navigate("home");
+                navigate("/");
               }
             }, 2000);
           }

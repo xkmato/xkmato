@@ -9,7 +9,7 @@ const Header = ({ navigate, currentPage }) => {
   const handleLogout = async () => {
     try {
       await signOut(auth);
-      navigate("home");
+      navigate("/");
     } catch (error) {
       console.error("Error logging out:", error);
     }
