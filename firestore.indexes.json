@@ -1,4 +1,41 @@
 {
-  "indexes": [],
+  "indexes": [
+    {
+      "collectionGroup": "posts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "tagIds",
+          "arrayConfig": "CONTAINS"
+        },
+        {
+          "fieldPath": "isDraft",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "posts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "tags",
+          "arrayConfig": "CONTAINS"
+        },
+        {
+          "fieldPath": "isDraft",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "ASCENDING"
+        }
+      ]
+    }
+  ],
   "fieldOverrides": []
 }
