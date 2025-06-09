@@ -34,7 +34,6 @@ const PostList = ({ onSelectPost, navigate }) => {
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [error, setError] = useState(null);
   const [activeTab, setActiveTab] = useState("Latest");
   const [lastDoc, setLastDoc] = useState(null);
   const [hasMore, setHasMore] = useState(true);
@@ -259,7 +258,6 @@ const PostList = ({ onSelectPost, navigate }) => {
       }
     } catch (err) {
       console.error("Error loading more posts:", err);
-      setError("Failed to load more posts.");
     } finally {
       setLoadingMore(false);
     }
@@ -277,7 +275,6 @@ const PostList = ({ onSelectPost, navigate }) => {
     const appId = process.env.REACT_APP_FIREBASE_APP_ID;
     if (!appId) {
       console.error("REACT_APP_FIREBASE_APP_ID is not defined.");
-      setError("Application configuration error.");
       setLoading(false);
       return;
     }
@@ -342,13 +339,11 @@ const PostList = ({ onSelectPost, navigate }) => {
           setLoading(false);
         } catch (err) {
           console.error("Error processing initial posts:", err);
-          setError("Failed to load posts.");
           setLoading(false);
         }
       })
       .catch((err) => {
         console.error("Error loading initial posts:", err);
-        setError("Failed to load posts.");
         setLoading(false);
       });
 
@@ -460,9 +455,11 @@ const PostList = ({ onSelectPost, navigate }) => {
     otherTags.sort((a, b) => b.count - a.count);
 
     const result = [...bookTags.slice(0, 5)];
-    const remainingSlots = 5 - result.length;
+    const remainingSlots = 10 - result.length;
 
     if (remainingSlots > 0) {
+      // Sort otherTags alphabetically by tag name before slicing
+      otherTags.sort((a, b) => a.name.localeCompare(b.name));
       result.push(...otherTags.slice(0, remainingSlots));
     }
 

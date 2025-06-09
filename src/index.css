@@ -15,3 +15,54 @@ code {
   font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
     monospace;
 }
+
+/* Add this to your global CSS file or create a new one */
+.prose p {
+  margin-bottom: 1.5rem !important;
+  line-height: 1.8 !important;
+}
+
+.prose h1, .prose h2, .prose h3, .prose h4, .prose h5, .prose h6 {
+  margin-top: 2rem !important;
+  margin-bottom: 1rem !important;
+  font-weight: 600 !important;
+}
+
+.prose blockquote {
+  margin: 2rem 0 !important;
+  padding-left: 1.5rem !important;
+  border-left: 4px solid #e5e7eb !important;
+  font-style: italic !important;
+  color: #6b7280 !important;
+}
+
+.prose ul, .prose ol {
+  margin: 1.5rem 0 !important;
+  padding-left: 2rem !important;
+}
+
+.prose li {
+  margin-bottom: 0.5rem !important;
+}
+
+.prose img {
+  margin: 2rem auto !important;
+  border-radius: 8px !important;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1) !important;
+}
+
+.prose code {
+  background-color: #f3f4f6 !important;
+  padding: 0.25rem 0.5rem !important;
+  border-radius: 4px !important;
+  font-size: 0.9em !important;
+}
+
+.prose pre {
+  background-color: #1f2937 !important;
+  color: #f9fafb !important;
+  padding: 1.5rem !important;
+  border-radius: 8px !important;
+  margin: 2rem 0 !important;
+  overflow-x: auto !important;
+}

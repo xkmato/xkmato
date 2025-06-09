@@ -12,10 +12,12 @@ import {
   doc,
   collection as fsCollection,
   getDoc,
+  getDocs, // Add this import
   onSnapshot,
   orderBy,
   query,
   setDoc,
+  where, // Add this import
 } from "firebase/firestore";
 import { useContext, useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
@@ -23,7 +25,7 @@ import { FirebaseContext } from "../App";
 import SEOHead from "./SEOHead";
 
 const PostDetail = ({ onBack }) => {
-  const { db, user } = useContext(FirebaseContext); // Ensure user is provided in context
+  const { db, user } = useContext(FirebaseContext);
   const { userId, postId } = useParams();
   const [post, setPost] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -36,6 +38,11 @@ const PostDetail = ({ onBack }) => {
   const [comments, setComments] = useState([]);
   const [commentLoading, setCommentLoading] = useState(true);
   const [commentError, setCommentError] = useState(null);
+  // Add new state for book navigation
+  const [previousPost, setPreviousPost] = useState(null);
+  const [nextPost, setNextPost] = useState(null);
+  const [isBookCategory, setIsBookCategory] = useState(false);
+
   const shareUrl = window.location.href;
   const shareTitle = post?.title || "Check out this post!";
 
@@ -200,6 +207,82 @@ const PostDetail = ({ onBack }) => {
     return match ? match[1] : null;
   };
 
+  // New useEffect to fetch previous/next posts for book categories
+  useEffect(() => {
+    if (!db || !userId || !post || !post.tags || post.tags.length === 0) return;
+
+    // Check if post has tags that belong to the "Book" category
+    const hasBookTag = post.tags.some((tag) => {
+      // Handle different tag formats - ensure we can access categoryName
+      if (typeof tag === "string") {
+        // If it's a string, it's likely an old format, skip for book navigation
+        return false;
+      }
+
+      // Check if tag has categoryName property and it equals "Book"
+      return tag.categoryName && tag.categoryName.toLowerCase() === "book";
+    });
+
+    if (!hasBookTag) {
+      setIsBookCategory(false);
+      return;
+    }
+
+    setIsBookCategory(true);
+
+    // Find the first book tag
+    const bookTag = post.tags.find((tag) => {
+      return tag.categoryName && tag.categoryName.toLowerCase() === "book";
+    });
+
+    console.log("Book tag found:", bookTag);
+
+    if (!bookTag) return;
+
+    // For Firestore query, we need to search by the tag object
+    // Since Firestore array-contains works with exact matches, we need to query by the tag object
+    const postsCol = collection(
+      db,
+      `artifacts/${process.env.REACT_APP_FIREBASE_APP_ID}/users/${userId}/posts`
+    );
+
+    // Query posts that contain this specific book tag
+    const q = query(
+      postsCol,
+      where("tagIds", "array-contains", bookTag.id),
+      where("isDraft", "==", false), // Only published posts
+      orderBy("createdAt", "asc")
+    );
+
+    getDocs(q)
+      .then((querySnapshot) => {
+        const bookPosts = querySnapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }));
+
+        console.log("Book posts found:", bookPosts);
+        // Find current post index
+        const currentIndex = bookPosts.findIndex((p) => p.id === postId);
+        console.log("Current post index:", currentIndex);
+
+        if (currentIndex > 0) {
+          setPreviousPost(bookPosts[currentIndex - 1]);
+        } else {
+          setPreviousPost(null);
+        }
+
+        if (currentIndex < bookPosts.length - 1) {
+          setNextPost(bookPosts[currentIndex + 1]);
+        } else {
+          setNextPost(null);
+        }
+      })
+      .catch((err) => {
+        console.error("Error fetching book navigation posts:", err);
+      });
+  }, [db, userId, post, postId]);
+
   if (loading) return <div>Loading...</div>;
   if (error) return <div>{error}</div>;
   if (!post) return null;
@@ -250,13 +333,57 @@ const PostDetail = ({ onBack }) => {
           }
         />
       )}
-      <div className="mx-auto max-w-3xl p-6 bg-white rounded-xl shadow-md mt-8 border border-gray-100">
+      <div
+        className="mx-auto max-w-4xl p-8 bg-white rounded-xl shadow-sm mt-8 border border-gray-100"
+        style={{ fontFamily: "'Georgia', 'Times New Roman', serif" }}
+      >
         <button
           onClick={onBack}
           className="text-sm text-gray-500 hover:underline mb-4"
         >
           &larr; Back
         </button>
+
+        {/* Book Navigation - Previous Section */}
+        {isBookCategory && previousPost && (
+          <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-blue-600 font-medium mb-1">
+                  Previous Chapter
+                </p>
+                <a
+                  href={`/post/${userId}/${previousPost.id}`}
+                  className="text-blue-800 font-semibold hover:underline"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    window.history.pushState(
+                      {},
+                      "",
+                      `/post/${userId}/${previousPost.id}`
+                    );
+                    window.location.reload();
+                  }}
+                >
+                  {previousPost.title}
+                </a>
+              </div>
+              <svg
+                className="w-5 h-5 text-blue-600"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M15 19l-7-7 7-7"
+                />
+              </svg>
+            </div>
+          </div>
+        )}
 
         {/* Draft indicator for author */}
         {post.isDraft && user?.uid === userId && (
@@ -504,13 +631,60 @@ const PostDetail = ({ onBack }) => {
         )}
 
         <div
-          className="prose max-w-none text-gray-700 leading-relaxed"
-          style={{ whiteSpace: "pre-wrap" }}
+          className="prose prose-xl max-w-none text-gray-900 leading-loose"
+          style={{
+            whiteSpace: "pre-wrap",
+            lineHeight: "1.9",
+            fontSize: "19px",
+            fontFamily: "'Georgia', 'Times New Roman', serif",
+            letterSpacing: "0.01em",
+          }}
           dangerouslySetInnerHTML={{ __html: post.content }}
         />
 
         {/* Divider */}
         <hr className="mb-6 border-gray-200" />
+
+        {/* Book Navigation - Next Section (add this before the comments section) */}
+        {isBookCategory && nextPost && (
+          <div className="mb-8 p-4 bg-green-50 border border-green-200 rounded-lg">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-green-600 font-medium mb-1">
+                  Next Chapter
+                </p>
+                <a
+                  href={`/post/${userId}/${nextPost.id}`}
+                  className="text-green-800 font-semibold hover:underline"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    window.history.pushState(
+                      {},
+                      "",
+                      `/post/${userId}/${nextPost.id}`
+                    );
+                    window.location.reload();
+                  }}
+                >
+                  {nextPost.title}
+                </a>
+              </div>
+              <svg
+                className="w-5 h-5 text-green-600"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M9 5l7 7-7 7"
+                />
+              </svg>
+            </div>
+          </div>
+        )}
 
         {/* Comments Section */}
         <div className="mb-8">

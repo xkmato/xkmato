@@ -365,6 +365,7 @@ const AdminPanel = () => {
         title: formTitle,
         content: formContent,
         tags: formTags,
+        tagIds: formTags.map((tag) => tag.id), // Add this line
         isDraft: formIsDraft,
         imageUrl: formImageUrl || null, // Include image URL
         updatedAt: new Date(),
@@ -407,7 +408,7 @@ const AdminPanel = () => {
     setFormContent(post.content);
     setFormTags(post.tags || []);
     setFormIsDraft(post.isDraft || false);
-    setFormImageUrl(post.imageUrl || ""); // Load image URL
+    setFormImageUrl(post.imageUrl || "");
     setMessage("");
   };
 
@@ -475,6 +476,65 @@ const AdminPanel = () => {
     setModalMessage("");
     setPostToDelete(null);
   };
+
+  // Add this function after the other handler functions, before the return statement
+
+  // const migrateExistingPosts = async () => {
+  //   if (!db || !user || !userId) {
+  //     setMessage("Authentication required for migration.");
+  //     return;
+  //   }
+
+  //   setLoading(true);
+  //   setMessage("Starting migration of existing posts...");
+
+  //   try {
+  //     const postsRef = collection(
+  //       db,
+  //       `artifacts/${appId}/users/${userId}/posts`
+  //     );
+  //     const postsSnapshot = await getDocs(postsRef);
+
+  //     let updatedCount = 0;
+  //     let skippedCount = 0;
+
+  //     for (const postDoc of postsSnapshot.docs) {
+  //       const postData = postDoc.data();
+
+  //       // Skip if isDraft already exists
+  //       if (postData.isDraft === false) {
+  //         skippedCount++;
+  //         continue;
+  //       }
+
+  //       // Extract tag IDs from the existing tags array
+  //       const tagIds = postData.tags
+  //         ? postData.tags.map((tag) => tag.id).filter(Boolean)
+  //         : [];
+
+  //       // Update the post with tagIds
+  //       const postRef = doc(
+  //         db,
+  //         `artifacts/${appId}/users/${userId}/posts`,
+  //         postDoc.id
+  //       );
+  //       await updateDoc(postRef, {
+  //         isDraft: false,
+  //         updatedAt: new Date(),
+  //       });
+
+  //       updatedCount++;
+  //     }
+
+  //     setMessage(
+  //       `Migration completed! Updated ${updatedCount} posts, skipped ${skippedCount} posts that already had isDraft.`
+  //     );
+  //   } catch (error) {
+  //     setMessage(`Migration failed: ${error.message}`);
+  //   } finally {
+  //     setLoading(false);
+  //   }
+  // };
 
   if (loading && posts.length === 0)
     // Show initial loading only if posts aren't there yet
@@ -836,9 +896,16 @@ const AdminPanel = () => {
 
       {/* Post List - Update to show image */}
       <div className="bg-white rounded-xl shadow-lg p-6">
-        <h3 className="text-2xl font-semibold text-gray-800 mb-4">
-          Your Posts
-        </h3>
+        {/* <div className="flex justify-between items-center mb-4">
+          <h3 className="text-2xl font-semibold text-gray-800">Your Posts</h3>
+          <button
+            onClick={migrateExistingPosts}
+            disabled={loading}
+            className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition duration-300 ease-in-out shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Migrate Posts (Add isDraft)
+          </button>
+        </div> */}
         {posts.length === 0 ? (
           <p className="text-gray-600">You haven't created any posts yet.</p>
         ) : (
